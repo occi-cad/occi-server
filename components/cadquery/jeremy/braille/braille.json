@@ -1,0 +1,7 @@
+{
+    "description" : "A braille generator",
+    "params" : {
+        "text" : { "type" : "text", "default" : "This is braille!" },
+        "width" : { "type": "number", "start" : 5, "end" : 20, "step" : 1, "default" : "10" }
+    }
+}

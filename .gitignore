@@ -1,3 +1,6 @@
+#### ON DISK COMPONENT LIBRARY ####
+# ./components # eventually add this to .gitignore
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

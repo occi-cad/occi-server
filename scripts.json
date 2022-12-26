@@ -1,0 +1,47 @@
+[
+    {
+        "name": "Bracket",
+        "created_at" : "2022-10-01 10:10:10",
+        "updated_at" : "2022-10-01 10:10:10",
+        "published" : true,
+        "params" : { 
+            "width" : {
+                "type": "number",
+                "start" : 1,
+                "end" : 100,
+                "default" : 50,
+                "description" : "The with of the bracket",
+                "units" : "mm"
+            }
+        },
+        "code" : "// Some code here",
+        "meta" : { "description" : "A simple parametric bracket", "externalDocs" : { "url" : "https://viewer.archiyou.com/bracket" }}
+    },
+    {
+        "name": "Connector",
+        "created_at" : "2022-10-01 10:10:10",
+        "updated_at" : "2022-10-01 10:10:10",
+        "published" : true,
+        "params" : { 
+            "input_radius" : 
+            {
+                "type": "number",
+                "start" : 50,
+                "end" : 100,
+                "default" : 60,
+                "meta" : "Radius of input tube"
+            },
+            "output_radius":
+            {
+                "name" : "output_radius",
+                "type": "number",
+                "start" : 50,
+                "end" : 100,
+                "default" : 60,
+                "meta" : "Radius of output tube"
+            }
+        },
+        "code" : "// Some code here",
+        "meta" : { "description": "A simple parametric connector" }
+    }
+]
