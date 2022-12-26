@@ -1,7 +1,9 @@
 # OCCI-API
 
 Open CAD Components Interface (OCCI) brings parametric components to all by using ScriptCAD engines like CadQuery, OpenSCAD and Archiyou. 
+
 The OCCI standard enables the creation of Libraries of CADScripts. Scripts can be configured by Parameters and Parameter Presets and are executed by the OCCI execution engines and returned as a 3d Model in various formats (STEP, STL, GLTF). 
+
 CAD designers can use the OCCI FreeCAD plugin to access a lot of parametric CAD components from a curated list of Libraries. For developers OCCI offers REST API’s to start making applications with parametric CAD content. 
 
 ## Definitions
