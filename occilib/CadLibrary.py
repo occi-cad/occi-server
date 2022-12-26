@@ -121,7 +121,7 @@ class CadLibrary:
 
     def _template_to_regex(self,template:str):
         template = template.replace('/','\/')
-        re_dirs = re.sub(r'{[^\}]+\}\\', r'([^\/]+)', template)
+        re_dirs = re.sub(r'{[^\}]+\}\\', r'([^\/]+)', template) # TODO: use named groups!
         regex = re_dirs.replace('{script}','([^\/$]+)$')
         return regex
 
