@@ -27,7 +27,7 @@ class CadLibrary:
     FILE_STRUCTURE_TEMPLATES = [
         r'{org}/{author}/{component}/{script}',
         r'{author}/{component}/{script}',
-        r'{component}/{script}',
+        r'{component}/{script}', # maybe change this to {author}/{script}?
         r'{script}',
     ]
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
