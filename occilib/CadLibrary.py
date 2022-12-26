@@ -33,7 +33,6 @@ class CadLibrary:
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
     CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
 
-    source:str = 'directory' # or json file
     path = None # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
 
@@ -77,7 +76,7 @@ class CadLibrary:
         self.path = path if os.path.isdir(path) else None
         return self.path
 
-    def _load_scripts_json(self, rel_path:str):
+    def _load_scripts_json(self, rel_path:str) -> List[CadScript]:
 
         json_file_path = os.path.realpath(os.path.join(os.path.dirname(__main__.__file__), rel_path))
 
@@ -103,9 +102,8 @@ class CadLibrary:
             return self.scripts
 
         
-    def _load_scripts_dir(self, path:str):
+    def _load_scripts_dir(self, path:str) -> List[CadScript]:
         glob_patterns = list(map(lambda t: self._template_to_glob_pattern(t), self.FILE_STRUCTURE_TEMPLATES ))
-        script_files = []
         for g in glob_patterns:
             for ext in self.CADSCRIPT_FILE_GLOB:
                 glob_path_and_file = g.format(script=ext)
@@ -114,6 +112,7 @@ class CadLibrary:
                     script = self._script_path_to_script(found_file_path) 
                     if script:
                         self.scripts.append(script)
+                        return self.scripts
 
 
     def _template_to_glob_pattern(self, template:str) -> str:
