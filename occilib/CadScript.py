@@ -12,7 +12,7 @@ from typing import List, Any, Dict
 from pydantic import BaseModel
 
 from .models import ScriptCodeCadLanguage, ModelFormat,ModelQuality
-from .Param import ParamBase,ParamNumber
+from .Param import ParamBase, ParamNumber, ParamText
 
 class CadScriptRequest(BaseModel):
     """
@@ -42,7 +42,8 @@ class CadScript(BaseModel):
     prev_version:str = None
     safe:bool = False # if validated as safe code
     published:bool = True # if available to the public
-    params:Dict[(str, ParamBase | ParamNumber)] = {} # list of param definitions
+    params:Dict[str, ParamBase | ParamNumber | ParamText] = {} # list of param definitions - TODO: combine ParamTypes
+    parameter_presets:Dict[str, Dict[str, ParamNumber|ParamText]] = {} # TODO: presets of parameters by variant name
     code: str  = None# the code of the CAD component
     codecad_language:ScriptCodeCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
     codecad_version:str = None # not used currently
