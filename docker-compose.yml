@@ -7,7 +7,7 @@ services:
   api:
     restart: always
     container_name: occi-rest-api
-    build: ./ay-fastapi/.
+    build: .
     env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
       - ./.env 
     ports:
