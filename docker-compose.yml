@@ -1,0 +1,39 @@
+version: '3'
+services:
+
+  # TODO: proxy
+  # https://github.com/JonasAlfredsson/docker-nginx-certbot/
+
+  api:
+    restart: always
+    container_name: occi-rest-api
+    build: ./ay-fastapi/.
+    env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
+      - ./.env 
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/app
+
+  rmq:
+      restart: always
+      container_name: occi-compute-queue
+      image: rabbitmq:3-management
+      env_file:
+        - ./.env
+      ports:
+        - "15672:15672"
+        - "5672:5672"
+
+  #ayworker:
+  #   restart: always
+  #   container_name: ay-worker
+  #   image: node:15-alpine
+  #   volumes:
+  #      - ./archiyou-compute-worker:/compute-worker
+  #   working_dir: /compute-worker
+  #   command: node --experimental-specifier-resolution=node ./build/index.js
+  #   depends_on:
+  #     - rmq
+
+  # TODO: cqworker
