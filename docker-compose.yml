@@ -7,19 +7,20 @@ services:
   api:
     restart: always
     container_name: occi-rest-api
+    command: uvicorn -app-dir=/occi main:app --host 0.0.0.0 --reload
     build: .
-    env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
+    env_file:
       - ./.env 
     ports:
       - "8080:80"
     volumes:
-      - .:/app
+      - .:/occi
 
   rmq:
       restart: always
-      container_name: occi-compute-queue
+      container_name: occi-rmq
       image: rabbitmq:3-management
-      env_file:
+      env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
         - ./.env
       ports:
         - "15672:15672"
