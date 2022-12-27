@@ -7,7 +7,7 @@ services:
   api:
     restart: always
     container_name: occi-rest-api
-    command: uvicorn -app-dir=/occi main:app --host 0.0.0.0 --reload
+    command: uvicorn main:app --app-dir=/occi --host 0.0.0.0
     build: .
     env_file:
       - ./.env 

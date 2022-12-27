@@ -39,6 +39,7 @@ class CadLibrary:
     def __init__(self, rel_path:str=DEFAULT_PATH):
         """
             Populate a library with CadScripts either from a directory (default) or a json file (for debugging)
+            Paths are relative to root of the api directory
         """
         self._setup_logger()
 
@@ -72,16 +73,25 @@ class CadLibrary:
             self.logger.error(e)
 
     def _check_path(self, rel_path:str) -> str:
-        path = os.path.realpath(os.path.join(os.path.dirname(__main__.__file__), rel_path))
+        # rel_path is related to the root of this project (occilib/..)
+        path = os.path.realpath(
+            os.path.join(
+                os.path.dirname(
+                    os.path.dirname(__file__)), rel_path))
+
         self.path = path if os.path.isdir(path) else None
         return self.path
 
     def _load_scripts_json(self, rel_path:str) -> List[CadScript]:
 
-        json_file_path = os.path.realpath(os.path.join(os.path.dirname(__main__.__file__), rel_path))
+        # rel_path is related to the root of this project (occilib/..)
+        json_file_path = os.path.realpath(
+            os.path.join(
+                os.path.dirname(
+                    os.path.dirname(__file__)), rel_path))
 
         if not os.path.isfile(json_file_path):
-            self.logger.error('CadLibrary::_load_scripts_json(): No valid JSON file given ("{json_file_path}")!')
+            self.logger.error(f'CadLibrary::_load_scripts_json(): No valid JSON file given ("{json_file_path}")!')
             return
 
         # just parse the json
