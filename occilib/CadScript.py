@@ -10,20 +10,22 @@
 from datetime import datetime
 from typing import List, Any, Dict
 from pydantic import BaseModel
+import hashlib
+import base64
+import json
 
-from .models import ScriptCodeCadLanguage, ModelFormat,ModelQuality
-from .Param import ParamBase, ParamNumber, ParamText
+from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText
 
-class CadScriptRequest(BaseModel):
+class ModelRequest(BaseModel):
     """
         Request to execute CadScript with given params and output form
     """
-    id:str # runtime instance id
-    params: List[ParamBase]
-    format: ModelFormat # requested output format of the model
-    quality: ModelQuality
-    meta: dict # TODO
-
+    hash:str = None # name+param+values hash id
+    params: Dict[str, ParamConfigBase] = {}
+    format: ModelFormat = 'step' # requested output format of the model
+    quality: ModelQuality = 'high'
+    meta: dict = {} # TODO
 
 class CadScript(BaseModel):
     """ 
@@ -42,23 +44,38 @@ class CadScript(BaseModel):
     prev_version:str = None
     safe:bool = False # if validated as safe code
     published:bool = True # if available to the public
-    params:Dict[str, ParamBase | ParamNumber | ParamText] = {} # list of param definitions - TODO: combine ParamTypes
-    parameter_presets:Dict[str, Dict[str, ParamNumber|ParamText]] = {} # TODO: presets of parameters by variant name
+    params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText] = {} # list of param definitions - TODO: combine ParamTypes
+    parameter_presets:Dict[str, Dict[str, ParamConfigNumber|ParamConfigText]] = {} # TODO: presets of parameters by variant name
     code: str  = None# the code of the CAD component
-    codecad_language:ScriptCodeCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
-    codecad_version:str = None # not used currently
-    request:CadScriptRequest = None
+    script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
+    script_cad_version:str = None # not used currently
     meta:dict = None # TODO: Remove? Generate tag for FastAPI on the fly
+    request:ModelRequest = ModelRequest() # just make an empty ModelRequest instance
+    results:ModelResult = None
+
+    def hash(self) -> str:
+
+        if not self.request:
+            self.logger.error('CadLibrary::hash(script): This CadScript is not an instance. We need request attribute too!')
+            return None
+        
+        params_str = ''
+        if self.request.params and len(self.request.params.keys()) > 0:
+            for name,param in self.request.params.items():
+                params_str += f'{name}={json.dumps(dict(param))}&'
+        
+        self.request.hash = self._hash(self.name + params_str)
+        return self.request.hash
+
+        
+    def _hash(self, inp:str) -> str:
+        # TODO: research this hash function!
+        HASH_LENGTH_TRUNCATE = 11
+        return base64.urlsafe_b64encode(hashlib.md5(inp.encode()).digest())[:HASH_LENGTH_TRUNCATE].decode("utf-8")
 
 
-class CadExecution(BaseModel):
-    request_id:str # refers back to CadScriptRequest instance
-    models:dict # TODO Output models by format
-    errors:List[Any] = []# TODO
-    messages:List[Any] = [] # TODO
-    tables:Any # TODO
-    duration:int # in ms
-    
+
+
 
 
 

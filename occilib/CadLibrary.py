@@ -4,7 +4,11 @@
 
     Main class for getting CadScripts from filesystem and serving them up 
     as parametric models through a REST API to the user. 
-    Either the result is served from the cache or executed in real time by workers.
+    Either the result is served from the cache or executed in real time by workers
+
+    Important notes:
+
+    * Unique names for scripts
 
 """
 
@@ -19,7 +23,7 @@ import json
 from typing import List, Dict
 
 from .CadScript import CadScript
-from .Param import ParamNumber, ParamText
+from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
 
@@ -35,6 +39,7 @@ class CadLibrary:
 
     path = None # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
+    scripts_by_name:Dict[str,CadScript] = {}
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
         """
@@ -51,7 +56,18 @@ class CadLibrary:
                 self.logger.error(f'CadLibrary::__init__(): Given path "{rel_path}" is not a valid directory')
             else:
                 self._load_scripts_dir(self.path)
-                print(self.scripts)
+
+        # for easy and fast access to certain scripts from the API 
+        for script in self.scripts:
+            self.scripts_by_name[script.name] = script
+
+    def get_script(self, name:str) -> CadScript:
+        
+        script = self.scripts_by_name.get(name)
+
+        if not script:
+            self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
+        return script
         
     def _setup_logger(self):
 
@@ -236,16 +252,16 @@ class CadLibrary:
         
     def _upgrade_params(self, base_script:CadScript, script_config:dict) -> CadScript: 
         """
-            Pydantic automatically parses the Param as ParamBase
-            Upgrade them according to the type field so we get ParamNumber, ParamText etc
+            Pydantic automatically parses the Param as ParamConfigBase
+            Upgrade them according to the type field so we get ParamConfigNumber, ParamConfigText etc
 
         """
         TYPE_TO_PARAM_CLASS = {
-            'number' : ParamNumber,
-            'text' : ParamText,
+            'number' : ParamConfigNumber,
+            'text' : ParamConfigText,
         }
 
-        new_params:Dict[str,ParamNumber|ParamText] = {}
+        new_params:Dict[str,ParamConfigNumber|ParamConfigText] = {}
         for name, param in base_script.params.items():
             ParamClass = TYPE_TO_PARAM_CLASS.get(param.type) # name of type is already validated by Pydantic and models.ParamType enum
             orig_param_data = list(filter( lambda param_conf: param_conf['name'] == param.name, script_config['params'].values()))[0]
@@ -254,10 +270,12 @@ class CadLibrary:
         base_script.params = new_params
 
         return base_script
+
+    #### HANDLING SCRIPT CONFIGS AND INSTANCES  ####
+
+    def get_cached(self, script:CadScript) -> bool:
+
+        return None
             
-
-
-
-
-
+   
 

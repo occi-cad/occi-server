@@ -32,7 +32,7 @@ class ModelUnits(str, Enum):
     foot = 'foot'
     mile = 'mile'
 
-class ScriptCodeCadLanguage(str,Enum):
+class ScriptCadLanguage(str,Enum):
     cadquery = 'cadquery'
     archiyou = 'archiyou'
     openscad = 'openscad'
@@ -47,8 +47,28 @@ class ModelQuality(str,Enum):
     medium = 'medium'
     high = 'high'
 
+class RequestResultFormat(str,Enum):
+    full ='full'
+    model = 'model'
+
 #### IO MODELS ####
 
-class InputScriptBase(BaseModel):
-    format: str = 'step' # TODO: typing: step, stl, gltf etc.
+class ModelRequestInput(BaseModel):
+    """ Used to handle input from API
+        This is model is extended on runtime to include specific parameter names:
+        ie: bracket?width=100
+        Is is then turned into a generic ModelRequest
+    """
+    script_name:str = None # script name
+    format: ModelFormat = 'step'
+    return_format:RequestResultFormat = 'full' # either return full CadScript instance or only specific model
 
+
+class ModelResult(BaseModel):
+    id:str # name + param hash
+    request_id:str
+    models:dict # TODO Output models by format
+    errors:List[Any] = []# TODO
+    messages:List[Any] = [] # TODO
+    tables:Any # TODO
+    duration:int # in ms

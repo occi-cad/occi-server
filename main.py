@@ -10,7 +10,7 @@ from occilib.ApiGenerator import ApiGenerator
 lib = CadLibrary('./scripts.json')
 scripts = lib.scripts
 
-api_generator = ApiGenerator()
+api_generator = ApiGenerator(lib)
 app = FastAPI(openapi_tags=api_generator.get_api_tags(scripts))
 api_generator.generate_endpoints(api=app, scripts=scripts)
 

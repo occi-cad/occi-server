@@ -1,6 +1,7 @@
 [
     {
         "name": "Bracket",
+        "description" : "A simple test bracket",
         "created_at" : "2022-10-01 10:10:10",
         "updated_at" : "2022-10-01 10:10:10",
         "published" : true,

@@ -4,21 +4,36 @@
 
 '''
 
-from ast import parse
 from typing import List
 from fastapi import FastAPI, Depends
-from .CadScript import CadScript
-from .Param import ParamBase, ParamNumber, ParamText
-from .models import InputScriptBase
 from pydantic import create_model, conint
+import logging
+
+from .CadScript import CadScript
+from .CadLibrary import CadLibrary
+from .ModelRequestHandler import ModelRequestHandler
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText
+from .models import ModelRequestInput
+
 
 class ApiGenerator:
 
-    def __init__(self):
+    library = None
+    request_handler:ModelRequestHandler = None
+    script:List[CadScript] = []
+    api = None
+    api_tags = [] # open API tags
+    
 
-        self.api = None
-        self.scripts = None
-        self.api_tags = [] # open API tags
+    def __init__(self, library:CadLibrary):
+
+        self.library = library
+
+        if isinstance(self.library, CadLibrary):
+            self.request_handler = ModelRequestHandler(self.library)
+        else:
+            self.error('ApiGenerator::__init__(library): Please supply a library instance to this ApiGenerator')
+
 
     def get_api_tags(self, scripts:List[CadScript]):
         
@@ -46,23 +61,24 @@ class ApiGenerator:
 
         api = self.api
 
-        EndpointInputModel = self._generate_endpoint_input_model(script)
+        # we generate specific input models that handle param names: bracket?width=10
+        SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
         
         # make both GET and POST endpoints
         @api.get(f'/{script.name}', tags=[script.name])
-        async def get_component_get(params:EndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
-            return {
-                'status' : 'FAKE EXECUTED',
-                'script' : dict(script),
-                'format': params.format
-            }
+        async def get_component_get(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
+            
+            # Main request handling
+            req.script_name = script.name # this is important to identify the requested script
+            req.return_format = 'model' # return model for GET requests
+            return self.request_handler.handle(req)
 
         @api.post(f'/{script.name}', tags=[script.name])
-        async def get_component_post(params:EndpointInputModel):
-            return {
-                'status' : 'FAKE EXECUTED',
-                'script' : dict(script),
-            }
+        async def get_component_post(req:SpecificEndpointInputModel=Depends()):
+            
+            # Main request handling
+            req.script_name = script.name # this is important to identify the requested script
+            return self.request_handler.handle(req)
 
 
 
@@ -71,18 +87,21 @@ class ApiGenerator:
         parsed_script = CadScript(**script)
         return parsed_script
     
-    """ Dynamically generate a Pydantic Input model that is used to generate API endpoint 
-            It extends the Base ScriptExecRequest with Parameters defined in the Script instance
-    """
     def _generate_endpoint_input_model(self, script:CadScript):
 
+        """ 
+            Dynamically generate a Pydantic Input model that is used to generate API endpoint 
+            It extends the Base ModelRequestInput with flat Parameters defined in the Script instance
+            In the defintion of the parameter query parameters type tests and default values are applied
+        """
+
+        BASE_EXEC_REQUEST = ModelRequestInput # this is the basic model for a Script exec request
         PARAM_TYPE_TO_PYTHON_TYPE = {
             'number' : float,
             'text' : str
             # TODO: more
         }
-        BASE_EXEC_REQUEST = InputScriptBase
-    
+        
         fields = {} # dynamic pydantic field definitions
 
         for param in script.params.values():
@@ -91,22 +110,22 @@ class ApiGenerator:
 
             if field_type:
                 field_def = self._param_to_field_def(param)
-                fields[param.name] = (field_def, param.default )
+                fields[param.name] = (field_def, param.default or param.start ) # here we plug the default value too
 
         # now make the Pydantic Input model definition
         EndpointInputModel = create_model(
             f'{script.name}Inputs', # for example BracketInputs
             **fields,
-            __base__ = InputScriptBase,
+            __base__ = BASE_EXEC_REQUEST,
         )
 
         return EndpointInputModel
     
-    def _parse_param_dict(self, param:dict=None) -> ParamBase:
+    def _parse_param_dict(self, param:dict=None) -> ParamConfigBase:
 
         PARAM_TYPE_TO_PYDANTIC_MODEL = {
-            'number' : ParamNumber,
-            'text' : ParamText,
+            'number' : ParamConfigNumber,
+            'text' : ParamConfigText,
             # TODO: More types
         }
 
@@ -118,7 +137,7 @@ class ApiGenerator:
 
         return None
         
-    def _param_to_field_def(self, param:ParamNumber|ParamText): # TODO: typing
+    def _param_to_field_def(self, param:ParamConfigNumber|ParamConfigText): # TODO: typing
 
         if param.type == 'number':
             return conint(ge=param.start, le=param.end, multiple_of=param.step)
@@ -130,6 +149,24 @@ class ApiGenerator:
 
         self.api_tags.append({ 'name': script.name, **script.meta })
 
+    def _setup_logger(self):
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(level=logging.INFO)
+
+        try:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)-4s %(message)s')
+            handler.setFormatter(formatter)
+
+            if (self.logger.hasHandlers()):  # see: http://tiny.cc/v5w6gz
+                self.logger.handlers.clear()
+
+            self.logger.addHandler(handler)
+
+        except Exception as e:
+            self.logger.error(e)
 
     
 

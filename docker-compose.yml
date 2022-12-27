@@ -7,12 +7,12 @@ services:
   api:
     restart: always
     container_name: occi-rest-api
-    command: uvicorn main:app --app-dir=/occi --host 0.0.0.0
     build: .
+    command: uvicorn main:app --app-dir=/occi --host 0.0.0.0
     env_file:
       - ./.env 
     ports:
-      - "8080:8000"
+      - "8090:8000" # same as local dev server for now
     volumes:
       - .:/occi
 
@@ -23,18 +23,20 @@ services:
       env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
         - ./.env
       ports:
-        - "15672:15672"
-        - "5672:5672"
+        - "5672:5672" # main
+        - "15672:15672" # dashboard
+        
 
-  #ayworker:
-  #   restart: always
-  #   container_name: ay-worker
-  #   image: node:15-alpine
-  #   volumes:
-  #      - ./archiyou-compute-worker:/compute-worker
-  #   working_dir: /compute-worker
-  #   command: node --experimental-specifier-resolution=node ./build/index.js
-  #   depends_on:
-  #     - rmq
+  cqworker:
+     restart: always
+     container_name: cq-worker
+     build: .
+     command: celery -A occilib.cqworker.celery worker --loglevel=info
+     volumes:
+        - ./archiyou-compute-worker:/compute-worker
+     depends_on:
+       - rmq
+     volumes:
+       - .:/occi
 
-  # TODO: cqworker
+  # TODO: ayworker in node
