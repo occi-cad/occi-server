@@ -126,6 +126,18 @@ class ModelRequestHandler():
         racing_tasks.add(loop.create_task(self.result_to_async(task)()))
 
         done_first, pending = loop.run_until_complete(asyncio.wait(racing_tasks, return_when=asyncio.FIRST_COMPLETED))
+        
+        """
+            TODO: DEBUG this message:
+            RuntimeError: Cannot enter into task <Task pending name='Task-1' coro=<Server.serve() running at /usr/local/lib/python3.10/site-packages/uvicorn/server.py:80> wait_for=<Future finished result=None> cb=[_run_until_complete_cb() at /usr/local/lib/python3.10/asyncio/base_events.py:184, WorkerThread.stop()]> while another task <Task pending name='Task-4' coro=<RequestResponseCycle.run_asgi() running at /usr/local/lib/python3.10/site-packages/uvicorn/protocols/http/h11_impl.py:407> cb=[set.discard()]> is being executed.
+        """
+        result = None
+        for coro in done_first:
+            try:
+                # return the first
+                result = coro.result()
+            except TimeoutError:
+                return None
 
         # cancel pending tasks
         for p in pending:
@@ -133,12 +145,7 @@ class ModelRequestHandler():
             with suppress(asyncio.CancelledError):
                 loop.run_until_complete(p)
                 
-        for coro in done_first:
-            try:
-                # return the first
-                return coro.result()
-            except TimeoutError:
-                return None
+        return result
 
     
     def result_to_async(self, task:AsyncResult): 

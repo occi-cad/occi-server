@@ -1,5 +1,6 @@
 import uvicorn as uvicorn
-from fastapi import FastAPI
+from starlette.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException
 from celery.result import AsyncResult
 
 from occilib.CadLibrary import CadLibrary
@@ -25,8 +26,17 @@ async def get_model_compute_task(script_name:str, script_instance_hash:str):
         If the task is done redirect to original url that will serve the result from cache
     """
     task_id = library.check_cache_is_computing(script_name, script_instance_hash)
-    task_result:AsyncResult = AsyncResult(task_id)
-    return { 'task_id': task_result.id, 'task_status': task_result.status }
+    # TODO: somewhere check if compute ever was ever succesful?
+    if task_id is False:
+        # no such task found in cache: redirect to original url
+        raise HTTPException(status_code=404, detail="Compute task not found. Please go back to original request url!")
+    else:
+        task_result:AsyncResult = AsyncResult(task_id)
+        # TODO: clear result from backend! .forget()
+        if task_result.ready():
+            return task_result.result # TODO: or redirect to original url (now with cache in place)
+        else:
+            return { 'task_id': task_result.id, 'task_status': task_result.status  } # TODO: stats like elapsed time?
 
 
 #### TEST SERVER ####

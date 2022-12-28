@@ -38,6 +38,7 @@ class CadLibrary:
     ]
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
     CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
+    COMPUTE_FILE_EXT = '.compute'
 
     source = 'disk' # source of the scripts: disk or file (debug)
     path = DEFAULT_PATH # absolute path to directory of CadScripts
@@ -64,6 +65,9 @@ class CadLibrary:
         # for easy and fast access to certain scripts from the API 
         for script in self.scripts:
             self.scripts_by_name[script.name] = script
+
+        # clear all compute files in cache to avoid old stuff blocking new tasks
+        self._clear_computing_files()
 
     def get_script(self, name:str) -> CadScript:
         
@@ -308,8 +312,8 @@ class CadLibrary:
         # to avoid all kinds of problems clear the directory before writing the task file
         self._clear_dir(script_request_dir_path)
 
-        with open(f'{script_request_dir_path}/{task_id}', 'w') as fp: # {library_path}/{component}/{param hash}/{task_id}
-            fp.write(script.json())
+        with open(f'{script_request_dir_path}/{task_id}{self.COMPUTE_FILE_EXT}', 'w') as fp: # {library_path}/{component}/{param hash}/{task_id}
+            fp.write(script.json()) # write requested script in file for convenience
 
         return True
 
@@ -326,13 +330,12 @@ class CadLibrary:
             if len(files) > 0:
                 first_file = files[0]
                 path, ext = os.path.splitext(first_file)
-                if ext == '': # TODO: make this more robust with very specific ext?
+                if ext == self.COMPUTE_FILE_EXT: # .compute extension for robustness
                     self.logger.info(f'ModelRequestHandler::check_cache_is_computing: Found computing. task_id = "{files[0]}"')
-                    return files[0] # return name of file, which is the task_id
+                    return files[0].replace(self.COMPUTE_FILE_EXT, '') # return name of file, which is the task_id
                 else:
                     return False # probably cached files
             else:
-                self.logger.error('ModelRequestHandler::check_cache_is_computing(): There are multiple files in cache')
                 False
 
         return False
@@ -354,6 +357,17 @@ class CadLibrary:
                 path.unlink()
             elif path.is_dir():
                 rmtree(path)
+
+    def _clear_computing_files(self) -> bool:
+
+        for path in Path(self.path).glob("**/*"):
+            if path.is_file() and path.suffix == self.COMPUTE_FILE_EXT:
+                path.unlink()
+
+        self.logger.info('CadLibrary::_clear_computing_files: Cleared old compute files!')
+
+        return True
+
 
 
 

@@ -8,8 +8,6 @@
 """
 
 
-import uuid
-import datetime
 from enum import Enum
 from typing import Any, List
 
@@ -65,10 +63,10 @@ class ModelRequestInput(BaseModel):
 
 
 class ModelResult(BaseModel):
-    id:str # name + param hash
-    request_id:str
-    models:dict # TODO Output models by format
+    id:str = None # name + param hash = instance hash
+    request_id:str = None
+    models:dict = {} # TODO Output models by format
     errors:List[Any] = []# TODO
     messages:List[Any] = [] # TODO
-    tables:Any # TODO
-    duration:int # in ms
+    tables:Any = [] # TODO
+    duration:int = None # in ms
