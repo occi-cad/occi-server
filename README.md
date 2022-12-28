@@ -6,6 +6,23 @@ The OCCI standard enables the creation of Libraries of CADScripts. Scripts can b
 
 CAD designers can use the OCCI FreeCAD plugin to access a lot of parametric CAD components from a curated list of Libraries. For developers OCCI offers REST API’s to start making applications with parametric CAD content. 
 
+## Developer Quickstart
+
+The stack is fully dockerized. You can either set up the full stack locally, or set up the storage layers (rabbitmq and redis) on some external server and run the Python scripts locally. 
+
+1. Add a .env file to the main directory based on env.example
+2. Go into a terminal and run:
+
+``` 
+    docker-compose up
+```
+
+You have now all the infrastructure available:
+* REST API: localhost:8090
+* RabbitMQ: localhost:5672 and dashboard on 15672
+* Redis: localhost:6379
+
+
 ## Definitions
 
 * Component: A 3d object. A part can be represented in multiple part formats
