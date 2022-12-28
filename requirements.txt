@@ -3,3 +3,5 @@ FastAPI
 Celery
 python-dotenv
 asgiref
+nest-asyncio
+redis

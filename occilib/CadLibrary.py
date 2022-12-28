@@ -169,7 +169,6 @@ class CadLibrary:
         for regex in file_parse_regexs:
             m = re.match(regex, script_path) # NOTE: script path is relative to library dir (this.path)
             if m:
-                print(m.groups())
                 author = None
                 org = None
                 script_name = None # name is handled in _parse_config(script_path)

@@ -27,7 +27,7 @@ services:
         - "15672:15672" # dashboard - TODO: close when outside port
 
   redis:
-      image: redis:6-alpine
+      image: redis:7-alpine
       ports: 
         - "6379:6379" # TODO: close after DEBUG
         
@@ -41,6 +41,7 @@ services:
       - .:/occi
      depends_on:
        - rmq
+       - redis 
      volumes:
        - .:/occi
 
