@@ -138,12 +138,17 @@ class ModelRequestHandler():
                 result = coro.result()
             except TimeoutError:
                 return None
-
+        
+        # continue the other task (the compute)
+        '''
         # cancel pending tasks
         for p in pending:
             p.cancel()
             with suppress(asyncio.CancelledError):
                 loop.run_until_complete(p)
+        '''
+
+        
                 
         return result
 
@@ -155,7 +160,9 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            return await sync_to_async(task.get,thread_sensitive=False)()
+            print('==== WAITING FOR COMPUTE IN COROUTINE ====')
+            compute_result = await sync_to_async(task.get,thread_sensitive=False)()
+            print('==== COMPUTE DONE ====')
         return wrapper
 
     def go_to_computing_url(self, script:CadScript, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
