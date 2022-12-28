@@ -8,9 +8,11 @@
 
 """
 
+import time
 import logging
 from fastapi import HTTPException
 from starlette.responses import RedirectResponse
+
 from typing import Dict
 
 import asyncio
@@ -103,7 +105,7 @@ class ModelRequestHandler():
                     # local debug
                     return requested_script
 
-    def wait_time_or_return_compute_url(self, task:AsyncResult, time:int=None): # time in seconds
+    def wait_time_or_return_compute_url(self, task:AsyncResult, wait_time:int=None): # time in seconds
         """
             Async wait for a given number of seconds T
             if t < T return compute result directly to API client 
@@ -112,24 +114,27 @@ class ModelRequestHandler():
             inspired by: https://stackoverflow.com/questions/53967281/what-would-be-promise-race-equivalent-in-python-asynchronous-code
         """
 
-        time = time or self.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
+        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
 
         # simple async waiting
         async def wait(t):
             await asyncio.sleep(t)
-            self.logger.warn(f'ModelRequestHandler::wait_time_or_return_compute_url: Wait for direct compute result elapsed: {time} seconds!')
+            self.logger.warn(f'ModelRequestHandler::wait_time_or_return_compute_url: Wait for direct compute result elapsed: {t} seconds!')
             return 'timeout'
 
         loop = asyncio.get_running_loop()
         racing_tasks = set()
-        racing_tasks.add(loop.create_task(wait(time)))
+        racing_tasks.add(loop.create_task(wait(wait_time)))
         racing_tasks.add(loop.create_task(self.result_to_async(task)()))
 
         done_first, pending = loop.run_until_complete(asyncio.wait(racing_tasks, return_when=asyncio.FIRST_COMPLETED))
         
         """
+            !!!
             TODO: DEBUG this message:
             RuntimeError: Cannot enter into task <Task pending name='Task-1' coro=<Server.serve() running at /usr/local/lib/python3.10/site-packages/uvicorn/server.py:80> wait_for=<Future finished result=None> cb=[_run_until_complete_cb() at /usr/local/lib/python3.10/asyncio/base_events.py:184, WorkerThread.stop()]> while another task <Task pending name='Task-4' coro=<RequestResponseCycle.run_asgi() running at /usr/local/lib/python3.10/site-packages/uvicorn/protocols/http/h11_impl.py:407> cb=[set.discard()]> is being executed.
+            The nested coroutine is blocking the main FastAPI loop? 
+            This might mean that the API does block the period of waiting for compute result
         """
         result = None
         for coro in done_first:
@@ -140,6 +145,11 @@ class ModelRequestHandler():
                 return None
         
         # continue the other task (the compute)
+        for pending_coro in pending:
+            print(pending_coro)
+            loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
+
+
         '''
         # cancel pending tasks
         for p in pending:
@@ -147,8 +157,6 @@ class ModelRequestHandler():
             with suppress(asyncio.CancelledError):
                 loop.run_until_complete(p)
         '''
-
-        
                 
         return result
 
@@ -160,9 +168,8 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            print('==== WAITING FOR COMPUTE IN COROUTINE ====')
-            compute_result = await sync_to_async(task.get,thread_sensitive=False)()
-            print('==== COMPUTE DONE ====')
+            compute_result:CadScript = await sync_to_async(task.get,thread_sensitive=False)() # includes results
+            return compute_result
         return wrapper
 
     def go_to_computing_url(self, script:CadScript, task_id:str, set_compute_status:bool=True) -> RedirectResponse:

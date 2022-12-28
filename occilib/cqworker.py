@@ -18,7 +18,7 @@ celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://local
 @celery.task(name='compute_task', bind=True) # bind needed for retries
 def compute_task(self,script:str): # json of CadScript
     time_start = time.time()
-    time.sleep(4) # TEMP instead of really execution on CQ
+    time.sleep(5) # TEMP instead of really execution on CQ
     script_instance = CadScript(**json.loads(script))
     script_instance.results = ModelResult() # some fase result 
     script_instance.results.duration = round((time.time() - time_start) * 1000) # in ms 
