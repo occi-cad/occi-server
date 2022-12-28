@@ -133,30 +133,28 @@ class ModelRequestHandler():
             !!!
             TODO: DEBUG this message:
             RuntimeError: Cannot enter into task <Task pending name='Task-1' coro=<Server.serve() running at /usr/local/lib/python3.10/site-packages/uvicorn/server.py:80> wait_for=<Future finished result=None> cb=[_run_until_complete_cb() at /usr/local/lib/python3.10/asyncio/base_events.py:184, WorkerThread.stop()]> while another task <Task pending name='Task-4' coro=<RequestResponseCycle.run_asgi() running at /usr/local/lib/python3.10/site-packages/uvicorn/protocols/http/h11_impl.py:407> cb=[set.discard()]> is being executed.
+            It mostly happens the first request
             The nested coroutine is blocking the main FastAPI loop? 
             This might mean that the API does block the period of waiting for compute result
         """
         result = None
-        for coro in done_first:
+        for coro in done_first: # in theory there could be more routines, but probably either wait or compute result
             try:
                 # return the first
                 result = coro.result()
             except TimeoutError:
                 return None
         
-        # continue the other task (the compute)
+        # continue the other task (can be the compute routine or the wait)
         for pending_coro in pending:
-            print(pending_coro)
-            loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
-
-
-        '''
-        # cancel pending tasks
-        for p in pending:
-            p.cancel()
-            with suppress(asyncio.CancelledError):
-                loop.run_until_complete(p)
-        '''
+            if '.wait' in str(pending_coro.get_coro()): # TODO: not really robust, make this better
+                # for the record: cancel the wait coroutine and block further errors
+                pending_coro.cancel()
+                with suppress(asyncio.CancelledError):
+                    loop.run_until_complete(pending_coro)
+            else:
+                # continue the compute result waiting routine
+                loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
                 
         return result
 
