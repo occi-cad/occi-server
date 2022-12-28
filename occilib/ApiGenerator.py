@@ -66,19 +66,23 @@ class ApiGenerator:
         
         # make both GET and POST endpoints
         @api.get(f'/{script.name}', tags=[script.name])
-        async def get_component_get(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
+        async def get_model_get(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
             
             # Main request handling
             req.script_name = script.name # this is important to identify the requested script
             req.return_format = 'model' # return model for GET requests
-            return self.request_handler.handle(req)
+            
+            result = await self.request_handler.handle(req)
+            return result
 
         @api.post(f'/{script.name}', tags=[script.name])
-        async def get_component_post(req:SpecificEndpointInputModel=Depends()):
+        async def get_model_post(req:SpecificEndpointInputModel=Depends()):
             
             # Main request handling
             req.script_name = script.name # this is important to identify the requested script
             return self.request_handler.handle(req)
+
+        
 
 
 

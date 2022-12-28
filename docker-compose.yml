@@ -23,8 +23,13 @@ services:
       env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
         - ./.env
       ports:
-        - "5672:5672" # main
-        - "15672:15672" # dashboard
+        - "5672:5672" # main - TODO: close when outside port
+        - "15672:15672" # dashboard - TODO: close when outside port
+
+  redis:
+      image: redis:6-alpine
+      ports: 
+        - "6379:6379" # TODO: close after DEBUG
         
 
   cqworker:
@@ -32,8 +37,8 @@ services:
      container_name: cq-worker
      build: .
      command: celery -A occilib.cqworker.celery worker --loglevel=info
-     volumes:
-        - ./archiyou-compute-worker:/compute-worker
+     volumes: # remove this to load scripts into the image on build
+      - .:/occi
      depends_on:
        - rmq
      volumes:

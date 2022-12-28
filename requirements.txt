@@ -2,3 +2,4 @@ uvicorn
 FastAPI
 Celery
 python-dotenv
+asgiref

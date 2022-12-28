@@ -16,13 +16,15 @@ import os
 import __main__
 import logging
 from glob import iglob
+from pathlib import Path
+from shutil import rmtree
 import re
 from datetime import datetime
 import json
 
 from typing import List, Dict
 
-from .CadScript import CadScript
+from .CadScript import CadScript, ModelRequest
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
@@ -37,9 +39,11 @@ class CadLibrary:
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
     CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
 
-    path = None # absolute path to directory of CadScripts
+    source = 'disk' # source of the scripts: disk or file (debug)
+    path = DEFAULT_PATH # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
     scripts_by_name:Dict[str,CadScript] = {}
+    dirs_by_script_name:Dict[str,str] = {}
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
         """
@@ -113,8 +117,6 @@ class CadLibrary:
         # just parse the json
         try:
             script_config_dicts = json.load(open(json_file_path))
-            print(script_config_dicts)
-
         except Exception as e:
             self.logger.error(f'CadLibrary::_load_scripts_json(): Failed to parse JSON config file "{json_file_path}" for CadScripts: "{e}"')
             return
@@ -125,7 +127,9 @@ class CadLibrary:
             base_script = self._upgrade_params(base_script, script_config)
             self.scripts.append(base_script)
 
-            return self.scripts
+        self.source = 'file' # set flag so we now the scripts came from a file
+
+        return self.scripts
 
         
     def _load_scripts_dir(self, path:str) -> List[CadScript]:
@@ -138,7 +142,9 @@ class CadLibrary:
                     script = self._script_path_to_script(found_file_path) 
                     if script:
                         self.scripts.append(script)
-                        return self.scripts
+        
+        self.source = 'disk'
+        return self.scripts
 
 
     def _template_to_glob_pattern(self, template:str) -> str:
@@ -155,7 +161,7 @@ class CadLibrary:
     def _script_path_to_script(self,script_path:str) -> CadScript: 
 
         """ Create Script instance based on script_path 
-            NOTE: script_path is relative to the library path
+            NOTE: script_path (including filename) is relative to the library path
         """
 
         file_parse_regexs = list(map(lambda t: self._template_to_regex(t), self.FILE_STRUCTURE_TEMPLATES))
@@ -177,6 +183,7 @@ class CadLibrary:
                     org = m.groups()[-4]
 
                 base_script = self._parse_config(script_path)
+                self._set_script_dir(base_script.name, script_path)
                 
                 base_script.created_at = self._get_script_created_at(script_path)
                 base_script.updated_at = self._get_script_created_at(script_path)
@@ -242,6 +249,13 @@ class CadLibrary:
                 self.logger.warn(f'CadLibrary::_parse_config(): Invalid config for component "{script_name}". Check config file: {script_config_file_path}!')
                 return CadScript(name=script_name) # return default script (only name is required)
                 
+    def _set_script_dir(self, script_name:str, script_path):
+        """
+            Set script name key in dirs_by_script_name 
+            for getting to script directories for caching 
+        """
+        self.dirs_by_script_name[script_name] = os.path.dirname(script_path)
+
             
     def _set_params_keys_to_names(self, script_config:dict) -> dict:
         # if script_config['params'] is a dict, set its keys as names to the Params
@@ -276,6 +290,74 @@ class CadLibrary:
     def get_cached(self, script:CadScript) -> bool:
 
         return None
+
+    #### CACHE OPERATIONS ####
+
+    def set_cache_is_computing(self, script:CadScript, task_id:str):
+        """
+            Set computing status in library cache for this script and parameter hash
+            This is needed to avoid computing things twice when requests are shortly after each other
+            The task_id is placed as filename in the cache directory 
+        """
+
+        if not isinstance(script.request, ModelRequest):
+            self.logger.error('CadLibrary::set_cache_computing(): Please supply a script instance with a .request!')
+            return False
+
+        script_request_dir_path = self._get_script_request_dir(script.name, script.hash())
+        Path(script_request_dir_path).mkdir(parents=True, exist_ok=True) # check and make needed dirs if not exist
+        # to avoid all kinds of problems clear the directory before writing the task file
+        self._clear_dir(script_request_dir_path)
+
+        with open(f'{script_request_dir_path}/{task_id}', 'w') as fp: # {library_path}/{component}/{param hash}/{task_id}
+            fp.write(script.json())
+
+        return True
+
+    def check_cache_is_computing(self, script_name:str, script_instance_hash:str) -> str|bool:
+        """
+            Check if a specific script model request is computing
+            Return task_id or False
+        """
+        script_request_dir = self._get_script_request_dir(script_name, script_instance_hash)
+
+        if os.path.exists(script_request_dir):
+            files = os.listdir(script_request_dir)
+            
+            if len(files) > 0:
+                first_file = files[0]
+                path, ext = os.path.splitext(first_file)
+                if ext == '': # TODO: make this more robust with very specific ext?
+                    self.logger.info(f'ModelRequestHandler::check_cache_is_computing: Found computing. task_id = "{files[0]}"')
+                    return files[0] # return name of file, which is the task_id
+                else:
+                    return False # probably cached files
+            else:
+                self.logger.error('ModelRequestHandler::check_cache_is_computing(): There are multiple files in cache')
+                False
+
+        return False
+    
+    def _get_script_request_dir(self, script_name:str, script_instance_hash:str) -> str:
+
+        script_dir_path = self._get_script_filedir_path(script_name)
+        return f'{script_dir_path}/{script_instance_hash}/'
+
+    def _get_script_filedir_path(self, script_name:str) -> str:
+        if self.source == 'file':
+            return os.path.join(os.path.realpath(self.path), script_name)
+        else:
+            return self.dirs_by_script_name.get(script_name)
+    
+    def _clear_dir(self, dir_path) -> bool:
+        for path in Path(dir_path).glob("**/*"):
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                rmtree(path)
+
+
+
             
    
 
