@@ -34,7 +34,7 @@ class CadScript(BaseModel):
 
     """
     id:str = None # runtime instance id
-    name:str
+    name:str # always lowercase
     author:str = None
     org:str = None
     description:str = None 
@@ -46,10 +46,10 @@ class CadScript(BaseModel):
     published:bool = True # if available to the public
     params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText] = {} # list of param definitions - TODO: combine ParamTypes
     parameter_presets:Dict[str, Dict[str, ParamConfigNumber|ParamConfigText]] = {} # TODO: presets of parameters by variant name
-    code: str  = None# the code of the CAD component
+    code: str  = None# the code of the CAD script
     script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
     script_cad_version:str = None # not used currently
-    meta:dict = None # TODO: Remove? Generate tag for FastAPI on the fly
+    meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
     request:ModelRequest = ModelRequest() # just make an empty ModelRequest instance
     results:ModelResult = None
 
@@ -73,7 +73,14 @@ class CadScript(BaseModel):
         HASH_LENGTH_TRUNCATE = 11
         return base64.urlsafe_b64encode(hashlib.md5(inp.encode()).digest())[:HASH_LENGTH_TRUNCATE].decode("utf-8")
 
+    def get_param_values_dict(self) -> dict:
+        if self.request and type(self.request.params) is dict:
+            # params is in { name: { value: 'some value' }} format
+            param_values:dict = {}
+            for k,v in self.request.params.items():
+                param_values[k] = v.value
 
+            return param_values
 
 
 

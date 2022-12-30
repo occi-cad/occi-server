@@ -15,7 +15,7 @@
                 "units" : "mm"
             }
         },
-        "code" : "// Some code here",
+        "code" : "width = 50\nbox=cadquery.Workplane('top').box(width,width,width)",
         "meta" : { "description" : "A simple parametric bracket", "externalDocs" : { "url" : "https://viewer.archiyou.com/bracket" }}
     },
     {

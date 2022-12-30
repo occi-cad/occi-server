@@ -103,6 +103,7 @@ class ModelRequestHandler():
                         return result_or_timeout
                 else:
                     # local debug
+                    self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
                     return requested_script
 
     def wait_time_or_return_compute_url(self, task:AsyncResult, wait_time:int=None): # time in seconds
@@ -204,10 +205,11 @@ class ModelRequestHandler():
                     filled_params[name] = ParamInstance(value=related_filled_param)
 
             script.request.params = filled_params
-            
-            return script
 
-        return None
+        # NOTE: script can also have no parameters!    
+        return script
+        
+        
 
     def _setup_logger(self):
 

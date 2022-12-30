@@ -1,6 +1,11 @@
 # pull official base image
 FROM python:3.10-slim
 
+# Add libGL which is needed for opencascade libs
+RUN apt-get update && apt-get install -y \
+	libgl1 \
+	libgl1-mesa-glx
+
 # set work directory
 WORKDIR /occi
 

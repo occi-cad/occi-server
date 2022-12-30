@@ -69,6 +69,8 @@ class CadLibrary:
         # clear all compute files in cache to avoid old stuff blocking new tasks
         self._clear_computing_files()
 
+        self._print_library_overview()
+
     def get_script(self, name:str) -> CadScript:
         
         script = self.scripts_by_name.get(name)
@@ -107,7 +109,6 @@ class CadLibrary:
         return self.path
 
     def _load_scripts_json(self, rel_path:str) -> List[CadScript]:
-
         # rel_path is related to the root of this project (occilib/..)
         json_file_path = os.path.realpath(
             os.path.join(
@@ -166,6 +167,7 @@ class CadLibrary:
 
         """ Create Script instance based on script_path 
             NOTE: script_path (including filename) is relative to the library path
+            TODO: rewrite this from template pattern and grouped regex for easy config!
         """
 
         file_parse_regexs = list(map(lambda t: self._template_to_regex(t), self.FILE_STRUCTURE_TEMPLATES))
@@ -176,7 +178,8 @@ class CadLibrary:
                 author = None
                 org = None
                 script_name = None # name is handled in _parse_config(script_path)
-                script_file_name = m.groups()[-1] 
+                script_file_name_ext = m.groups()[-1] # includes extension
+                script_file_name = script_file_name_ext.split('.')[0]
                 
                 if len(m.groups()) >= 2: 
                     script_name = m.groups()[-2] 
@@ -186,8 +189,12 @@ class CadLibrary:
                     org = m.groups()[-4]
 
                 base_script = self._parse_config(script_path)
+                base_script.name = base_script.name.lower() # always lowercase
                 self._set_script_dir(base_script.name, script_path)
-                
+
+                # getting extra info from path
+                base_script.code = self._get_code_from_script_path(script_path)
+                base_script.script_cad_language = self._get_code_cad_language(script_path)
                 base_script.created_at = self._get_script_created_at(script_path)
                 base_script.updated_at = self._get_script_created_at(script_path)
                 base_script.author = author
@@ -204,15 +211,16 @@ class CadLibrary:
         script_abs_path = os.path.realpath(os.path.join(self.path, script_path))
         return datetime.fromtimestamp(os.path.getmtime(script_abs_path))
 
-
     def _parse_config(self,script_path:str) -> CadScript:
         """
             Basic on script_path (relative to library dir) scan directory for a config file (*.json or *.yaml)
             If config found populate an CadScript instance, otherwise return
         """
         script_dir_abs_path = os.path.dirname(os.path.realpath(os.path.join(self.path, script_path)))
+        script_dir_name = os.path.split(script_dir_abs_path)[-1]
         script_path, script_ext = os.path.splitext(script_path)
-        script_name = os.path.split(script_path)[-1]
+        script_name_with_ext = os.path.split(script_path)[-1]
+        script_name = script_name_with_ext.split('.')[0]
         
         script_config_file = None
         for config_ext in self.CADSCRIPT_CONFIG_GLOB:
@@ -231,6 +239,7 @@ class CadLibrary:
             script_config_file_path = os.path.realpath(os.path.join(script_dir_abs_path, script_config_file))
             script_config_file_name, script_config_file_ext = os.path.splitext(script_config_file)
 
+            script_config = None
             base_script = None
 
             if script_config_file_ext == '.json':
@@ -238,9 +247,13 @@ class CadLibrary:
                     script_config = json.load(open(script_config_file_path))
                 except Exception as e:
                     self.logger.error(f'CadLibrary::_parse_config(): Failed to parse JSON config file "{script_config_file_path}" for CadScript "{script_name}": {e}')
-                self._set_params_keys_to_names(script_config)
-                base_script = CadScript(**{ 'name': script_name } | script_config)
-                base_script = self._upgrade_params(base_script, script_config)
+
+                if script_config:
+                    self._set_params_keys_to_names(script_config)
+                    # naming priorities: config_file.name, script parent directory name ("script_dir_name") , script file name ("script_name")
+                    chosen_script_name = script_config.get('name') or script_dir_name or script_name
+                    base_script = CadScript(**{ 'name': chosen_script_name } | script_config) # CadScript needs a name
+                    base_script = self._upgrade_params(base_script, script_config)
                 
             elif script_config_file_ext == '.yaml' or script_config_file_ext == '.yml':
                 self.logger.warn('CadLibrary::_parse_config(): YML config files not implemented yet!')
@@ -251,7 +264,29 @@ class CadLibrary:
             else:
                 self.logger.warn(f'CadLibrary::_parse_config(): Invalid config for component "{script_name}". Check config file: {script_config_file_path}!')
                 return CadScript(name=script_name) # return default script (only name is required)
-                
+
+    def _get_code_cad_language(self, script_path_rel) -> str:
+        # TODO: this is not very robust when other script cad engines join
+        EXT_TO_CODE_CAD_LANGUAGE = { 
+            'py' : 'cadquery',
+            'js' : 'archiyou', 
+        }
+        return EXT_TO_CODE_CAD_LANGUAGE.get(script_path_rel.split('.')[-1])
+
+    def _get_code_from_script_path(self, script_path_rel:str) -> str:
+        """
+            Get code inside the script
+        """
+        script_path_abs = os.path.realpath(os.path.join(self.path, script_path_rel))
+
+        if not os.path.isfile(script_path_abs):
+            self.logger.error('CadLibrary::_get_code_from_script_path: given path to script is not a file!')
+            return None
+
+        with open(script_path_abs, 'r') as f:
+            return f.read()
+
+             
     def _set_script_dir(self, script_name:str, script_path):
         """
             Set script name key in dirs_by_script_name 
@@ -368,6 +403,20 @@ class CadLibrary:
 
         return True
 
+    def _print_library_overview(self):
+
+        self.logger.info('**** LIBRARY LOADED ****')
+        self.logger.info(f'Scripts: {len(self.scripts)}')
+        for script in self.scripts:
+            self.logger.info(f'- "{script.name}" [{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", LOC: {self._get_lines_of_code(script.code)}, author:"{script.author}", org:"{script.org}"')
+        
+        self.logger.info('********')
+
+    def _get_lines_of_code(self,code:str) -> int:
+        
+        if type(code) is not str:
+            return 0
+        return len(code.split('\n'))
 
 
 
