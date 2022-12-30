@@ -426,7 +426,7 @@ class CadLibrary:
             stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
             f.write(stl_binary)
 
-        
+        # TODO: depending on request.format and request.return_format return either full json or file
         return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
 
 
