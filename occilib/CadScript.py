@@ -15,14 +15,14 @@ import base64
 import json
 
 from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality
-from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
 
 class ModelRequest(BaseModel):
     """
         Request to execute CadScript with given params and output form
     """
     hash:str = None # name+param+values hash id
-    params: Dict[str, ParamConfigBase] = {}
+    params: Dict[str, ParamInstance] = {}
     format: ModelFormat = 'step' # requested output format of the model
     quality: ModelQuality = 'high'
     meta: dict = {} # TODO
@@ -50,8 +50,14 @@ class CadScript(BaseModel):
     script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
     script_cad_version:str = None # not used currently
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
+
+    
+class CadScriptRequest(CadScript):
+    """
+        CadScript that is used to make a request
+    """
+    
     request:ModelRequest = ModelRequest() # just make an empty ModelRequest instance
-    results:ModelResult = None
 
     def hash(self) -> str:
 
@@ -66,7 +72,6 @@ class CadScript(BaseModel):
         
         self.request.hash = self._hash(self.name + params_str)
         return self.request.hash
-
         
     def _hash(self, inp:str) -> str:
         # TODO: research this hash function!
@@ -83,12 +88,11 @@ class CadScript(BaseModel):
             return param_values
 
 
-
-
-
-
-
-
+class CadScriptResult(CadScriptRequest):
+    """
+        CadScript that has been through compute and has results
+    """
+    results:ModelResult = None
     
 
 

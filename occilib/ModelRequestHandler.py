@@ -2,7 +2,7 @@
 
     RequestHandler.py
 
-    Handle a model request (with CadScript and CadScriptRequest) from API:
+    Handle a model request (with CadScriptRequest) from API:
     1. Checking file system cache 
     2. Submitting the request to compute queue (RMQ)
 
@@ -25,7 +25,7 @@ from celery.result import AsyncResult
 
 from .models import ModelRequestInput
 from .Param import ParamConfigBase, ParamInstance
-from .CadScript import CadScript
+from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
 from .cqworker import compute_task
@@ -41,7 +41,6 @@ class ModelRequestHandler():
     #### END SETTINGS
 
     library:CadLibrary
-    cur_request:CadScript
     celery_connected:bool = False
 
     def __init__(self, library:CadLibrary):
@@ -70,7 +69,7 @@ class ModelRequestHandler():
     async def handle(self, req:ModelRequestInput):
         """
             Handle request coming from API
-            Prepare a full CadScript instance with request in it
+            Prepare a CadScriptRequest instance with request in it
             and get from cache or submit to compute workers
         """
 
@@ -79,7 +78,7 @@ class ModelRequestHandler():
             self.logger.error(m)
             raise HTTPException(500, detail=m) # raise http exception to give server error
 
-        requested_script = self._req_to_script_instance(req)
+        requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
 
         cached_script = self.library.get_cached(requested_script)
@@ -96,17 +95,20 @@ class ModelRequestHandler():
                 # no cache: submit to workers
                 if self.celery_connected:
                     task:AsyncResult = compute_task.apply_async(args=[], kwargs={ 'script' : requested_script.json() })
-                    result_or_timeout = self.wait_time_or_return_compute_url(task)
+                    result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
+
+                    # wait time is over before compute could finish:
                     if result_or_timeout == 'timeout':
                         return self.go_to_computing_url(requested_script, task.id)
                     else:
-                        return result_or_timeout
+                        # we got a compute result in time to respond directly to the API client
+                        return self.library.set_result_in_cache_and_return(result_or_timeout)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
                     return requested_script
 
-    def wait_time_or_return_compute_url(self, task:AsyncResult, wait_time:int=None): # time in seconds
+    def start_compute_wait_for_result_or_redirect(self, task:AsyncResult, wait_time:int=None) -> CadScriptResult: # time in seconds
         """
             Async wait for a given number of seconds T
             if t < T return compute result directly to API client 
@@ -117,11 +119,14 @@ class ModelRequestHandler():
 
         wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
 
+        def coro_is_wait(coro):
+            return '.wait' in str(coro) # TODO: not really robust, make this better
+
         # simple async waiting
         async def wait(t):
             await asyncio.sleep(t)
-            self.logger.warn(f'ModelRequestHandler::wait_time_or_return_compute_url: Wait for direct compute result elapsed: {t} seconds!')
-            return 'timeout'
+            self.logger.warn(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect: Wait for direct compute result elapsed: {t} seconds!')
+            return None
 
         loop = asyncio.get_running_loop()
         racing_tasks = set()
@@ -148,7 +153,7 @@ class ModelRequestHandler():
         
         # continue the other task (can be the compute routine or the wait)
         for pending_coro in pending:
-            if '.wait' in str(pending_coro.get_coro()): # TODO: not really robust, make this better
+            if coro_is_wait(pending_coro): # TODO: not really robust, make this better
                 # for the record: cancel the wait coroutine and block further errors
                 pending_coro.cancel()
                 with suppress(asyncio.CancelledError):
@@ -167,11 +172,11 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            compute_result:CadScript = await sync_to_async(task.get,thread_sensitive=False)() # includes results
+            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=False)() # includes results
             return compute_result
         return wrapper
 
-    def go_to_computing_url(self, script:CadScript, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
+    def go_to_computing_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
         """
             When compute result takes longer then WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
             Redirect to compute status url which the user can query untill the compute task is done 
@@ -183,31 +188,33 @@ class ModelRequestHandler():
         return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}')
 
 
-    def _req_to_script_instance(self,req:ModelRequestInput) -> CadScript:
+    def _req_to_script_request(self,req:ModelRequestInput) -> CadScriptRequest:
 
         if not isinstance(req, ModelRequestInput):
-            raise HTTPException(500, detail='ModelRequestHandler::_req_to_script_instance(req): No request given!') # raise http exception to give server error
+            raise HTTPException(500, detail='ModelRequestHandler::_req_to_script_request(req): No request given!') # raise http exception to give server error
         if not isinstance(self.library, CadLibrary):
-            raise HTTPException(500, detail='ModelRequestHandler::_req_to_script_instance(req): No library loaded. Cannot handle request!') # raise http exception to give server error
+            raise HTTPException(500, detail='ModelRequestHandler::_req_to_script_request(req): No library loaded. Cannot handle request!') # raise http exception to give server error
 
-        script = self.library.get_script(req.script_name)
+        script_request = self.library.get_script_request(req.script_name)
 
-        if not script:
-            raise HTTPException(500, detail=f'ModelRequestHandler::_req_to_script_instance(req): Cannot get script "{req.script_name}" from library!')
+        if not script_request:
+            raise HTTPException(500, detail=f'ModelRequestHandler::_req_to_script_request(req): Cannot get script "{req.script_name}" from library!')
 
+        script_request.request.format = req.format
+        script_request.request.return_format = req.return_format # set format in which to return to API (full=json, model return results.models[{format}])
         # in req are also the flattened requested param values
         filled_params:Dict[str,ParamInstance] = {} 
         
-        if script.params:
-            for name, param in script.params.items():
+        if script_request.params:
+            for name, param in script_request.params.items():
                 related_filled_param = getattr(req, name, None)
                 if related_filled_param:
                     filled_params[name] = ParamInstance(value=related_filled_param)
 
-            script.request.params = filled_params
+            script_request.request.params = filled_params
 
         # NOTE: script can also have no parameters!    
-        return script
+        return script_request
         
         
 

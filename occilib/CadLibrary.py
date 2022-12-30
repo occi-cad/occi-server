@@ -24,7 +24,7 @@ import json
 
 from typing import List, Dict
 
-from .CadScript import CadScript, ModelRequest
+from .CadScript import CadScript, CadScriptRequest, ModelRequest
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
@@ -43,7 +43,7 @@ class CadLibrary:
     source = 'disk' # source of the scripts: disk or file (debug)
     path = DEFAULT_PATH # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
-    scripts_by_name:Dict[str,CadScript] = {}
+    scripts_by_name:Dict[str,CadScriptRequest] = {}
     dirs_by_script_name:Dict[str,str] = {}
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
@@ -71,13 +71,16 @@ class CadLibrary:
 
         self._print_library_overview()
 
-    def get_script(self, name:str) -> CadScript:
+    def get_script_request(self, name:str) -> CadScriptRequest:
         
         script = self.scripts_by_name.get(name)
 
         if not script:
             self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
-        return script
+        
+        script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
+        print(script_request)
+        return script_request
         
     def _setup_logger(self):
 
@@ -108,7 +111,7 @@ class CadLibrary:
         self.path = path if os.path.isdir(path) else None
         return self.path
 
-    def _load_scripts_json(self, rel_path:str) -> List[CadScript]:
+    def _load_scripts_json(self, rel_path:str) -> List[CadScriptRequest]:
         # rel_path is related to the root of this project (occilib/..)
         json_file_path = os.path.realpath(
             os.path.join(
@@ -342,12 +345,12 @@ class CadLibrary:
             self.logger.error('CadLibrary::set_cache_computing(): Please supply a script instance with a .request!')
             return False
 
-        script_request_dir_path = self._get_script_request_dir(script.name, script.hash())
+        script_request_dir_path = self._get_script_cache_dir(script.name, script.hash())
         Path(script_request_dir_path).mkdir(parents=True, exist_ok=True) # check and make needed dirs if not exist
         # to avoid all kinds of problems clear the directory before writing the task file
         self._clear_dir(script_request_dir_path)
 
-        with open(f'{script_request_dir_path}/{task_id}{self.COMPUTE_FILE_EXT}', 'w') as fp: # {library_path}/{component}/{param hash}/{task_id}
+        with open(f'{script_request_dir_path}/{task_id}{self.COMPUTE_FILE_EXT}', 'w') as fp: # {library_path}/{component}/{component}-cache/{param hash}/{task_id}
             fp.write(script.json()) # write requested script in file for convenience
 
         return True
@@ -357,7 +360,7 @@ class CadLibrary:
             Check if a specific script model request is computing
             Return task_id or False
         """
-        script_request_dir = self._get_script_request_dir(script_name, script_instance_hash)
+        script_request_dir = f'{self._get_script_cache_dir(script_name)}/{script_instance_hash}'
 
         if os.path.exists(script_request_dir):
             files = os.listdir(script_request_dir)
@@ -375,10 +378,10 @@ class CadLibrary:
 
         return False
     
-    def _get_script_request_dir(self, script_name:str, script_instance_hash:str) -> str:
-
+    def _get_script_cache_dir(self, script_name:str) -> str:
+        #  {library_path}/{component}/{component}-cache
         script_dir_path = self._get_script_filedir_path(script_name)
-        return f'{script_dir_path}/{script_instance_hash}/'
+        return f'{script_dir_path}/{script_name}-cache'
 
     def _get_script_filedir_path(self, script_name:str) -> str:
         if self.source == 'file':
@@ -403,13 +406,21 @@ class CadLibrary:
 
         return True
 
+    def set_result_in_cache_and_return(self, script_result:CadScript):
+
+        result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
+        # place total JSON response in cache
+        f = open(f'{result_cache_dir}/result.json', 'w').write(script_result)
+        f.close()
+
+    #### UTILS ####
+
     def _print_library_overview(self):
 
-        self.logger.info('**** LIBRARY LOADED ****')
+        self.logger.info('**** OCCI COMPONENTS LIBRARY LOADED ****')
         self.logger.info(f'Scripts: {len(self.scripts)}')
         for script in self.scripts:
-            self.logger.info(f'- "{script.name}" [{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", LOC: {self._get_lines_of_code(script.code)}, author:"{script.author}", org:"{script.org}"')
-        
+            self.logger.info(f'- "{script.name}" [{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
         self.logger.info('********')
 
     def _get_lines_of_code(self,code:str) -> int:

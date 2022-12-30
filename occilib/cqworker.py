@@ -1,7 +1,7 @@
 import os
-import time
 import json # TODO: use orjson?
 import base64
+import time
 
 from celery import Celery # docs: https://docs.celeryq.dev/en/stable/userguide/tasks.html#basics
 from dotenv import dotenv_values
@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 import cadquery
 from cadquery import cqgi
 
-from .CadScript import CadScript
+from .CadScript import CadScriptResult
 from .models import ModelResult
 
 
@@ -20,15 +20,21 @@ celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL') or 'amqp://guest:pass@l
 celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 - TODO: move to redis?
 
 @celery.task(name='compute_task', bind=True) # bind needed for retries
-def compute_task(self,script:str): # json of CadScript
+def compute_task(self,script:str): # json of CadScript 
     time_start = time.time()
-    script_instance = CadScript(**json.loads(script))
+    script_result = CadScriptResult(**json.loads(script)) # parse CadScriptRequest json as CadScciptResult
+    result_response = ModelResult()
 
     #### REAL EXECUTION IN CADQUERY ####
-    if script_instance.script_cad_language == 'cadquery':
-        param_values = script_instance.get_param_values_dict()
-        build_result = cqgi.parse(script_instance.code).build(build_parameters=param_values, build_options={} )
-        build_time = round(build_result.buildTime * 1000) # in ms
+    # !!!! ONLY TRUSTED CODE !!!!
+    '''
+        Some NOTES to extend the worker:
+        - capture Exception and add to script.result.errors
+        
+    '''
+    if script_result.script_cad_language == 'cadquery':
+        param_values = script_result.get_param_values_dict()
+        build_result = cqgi.parse(script_result.code).build(build_parameters=param_values, build_options={} )
         
         # TODO: multiple calling show_object() populates a list of results: can we handle those?
         result = build_result.results[-1].shape  # for now use the last result
@@ -38,7 +44,7 @@ def compute_task(self,script:str): # json of CadScript
         #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?
         cadquery.exporters.export(result, 'result.stl', cadquery.exporters.ExportTypes.STL)
 
-        result_response = ModelResult()
+        
 
         with open('result.step', 'r') as f:
             result_response.models['step'] = f.read()
@@ -54,7 +60,9 @@ def compute_task(self,script:str): # json of CadScript
             result_response.models['stl'] = base64.b64encode(f.read()).decode('utf-8')
         os.remove('result.stl') # to be sure: clean up
 
-        
-    script_instance.results = result_response
-    script_instance.results.duration = build_time
-    return json.loads(script_instance.json()) # NOTE: .dict() does not serialize nested pydantic instances
+        script_result.results = result_response
+        script_result.results.duration = round((time.time() - time_start) * 1000) # in ms 
+
+    #### END EXECUTION
+
+    return json.loads(script_result.json()) # NOTE: .dict() does not serialize nested pydantic instances
