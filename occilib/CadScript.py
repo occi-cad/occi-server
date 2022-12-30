@@ -14,7 +14,7 @@ import hashlib
 import base64
 import json
 
-from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality
+from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
 
 class ModelRequest(BaseModel):
@@ -24,7 +24,8 @@ class ModelRequest(BaseModel):
     hash:str = None # name+param+values hash id
     params: Dict[str, ParamInstance] = {}
     format: ModelFormat = 'step' # requested output format of the model
-    quality: ModelQuality = 'high'
+    return_format: RequestResultFormat = None
+    quality: ModelQuality = 'high' # TODO
     meta: dict = {} # TODO
 
 class CadScript(BaseModel):

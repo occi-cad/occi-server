@@ -65,4 +65,4 @@ def compute_task(self,script:str): # json of CadScript
 
     #### END EXECUTION
 
-    return json.loads(script_result.json()) # NOTE: .dict() does not serialize nested pydantic instances
+    return script_result.dict()

@@ -98,11 +98,12 @@ class ModelRequestHandler():
                     result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
 
                     # wait time is over before compute could finish:
-                    if result_or_timeout == 'timeout':
+                    if result_or_timeout is None:
                         return self.go_to_computing_url(requested_script, task.id)
                     else:
                         # we got a compute result in time to respond directly to the API client
-                        return self.library.set_result_in_cache_and_return(result_or_timeout)
+                        script_result:CadScriptResult = result_or_timeout
+                        return self.library.set_result_in_cache_and_return(script_result)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
@@ -161,8 +162,11 @@ class ModelRequestHandler():
             else:
                 # continue the compute result waiting routine
                 loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
-                
-        return result
+        
+        if result is not None:
+            script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
+
+        return script_result
 
     
     def result_to_async(self, task:AsyncResult): 

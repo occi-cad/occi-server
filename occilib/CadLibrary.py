@@ -24,6 +24,8 @@ import json
 
 from typing import List, Dict
 
+from fastapi.responses import Response
+
 from .CadScript import CadScript, CadScriptRequest, ModelRequest
 from .Param import ParamConfigNumber, ParamConfigText
 
@@ -295,7 +297,7 @@ class CadLibrary:
             Set script name key in dirs_by_script_name 
             for getting to script directories for caching 
         """
-        self.dirs_by_script_name[script_name] = os.path.dirname(script_path)
+        self.dirs_by_script_name[script_name] = os.path.realpath(os.path.join(self.path, os.path.dirname(script_path)))
 
             
     def _set_params_keys_to_names(self, script_config:dict) -> dict:
@@ -406,12 +408,17 @@ class CadLibrary:
 
         return True
 
-    def set_result_in_cache_and_return(self, script_result:CadScript):
+    def set_result_in_cache_and_return(self, script_result:CadScript) -> dict: # dict of CadQueryResult
 
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
         # place total JSON response in cache
-        f = open(f'{result_cache_dir}/result.json', 'w').write(script_result)
-        f.close()
+        Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
+        script_result_json = script_result.json()
+        with open(f'{result_cache_dir}/result.json', 'w') as f:
+            f.write(script_result_json)
+        
+        return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
+
 
     #### UTILS ####
 
