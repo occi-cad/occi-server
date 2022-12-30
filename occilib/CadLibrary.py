@@ -21,6 +21,7 @@ from shutil import rmtree
 import re
 from datetime import datetime
 import json
+import base64
 
 from typing import List, Dict
 
@@ -408,14 +409,23 @@ class CadLibrary:
 
         return True
 
-    def set_result_in_cache_and_return(self, script_result:CadScript) -> dict: # dict of CadQueryResult
+    def set_script_result_in_cache_and_return(self, script_result:CadScript) -> Response: # return a raw Starlette/FastAPI response with json content
 
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
         # place total JSON response in cache
         Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
+
         script_result_json = script_result.json()
+
+        # save results to file
         with open(f'{result_cache_dir}/result.json', 'w') as f:
             f.write(script_result_json)
+        with open(f'{result_cache_dir}/result.step', 'w') as f:
+            f.write(script_result.results.models['step'])
+        with open(f'{result_cache_dir}/result.stl', 'wb') as f:
+            stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
+            f.write(stl_binary)
+
         
         return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
 

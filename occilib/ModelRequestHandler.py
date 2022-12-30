@@ -103,7 +103,7 @@ class ModelRequestHandler():
                     else:
                         # we got a compute result in time to respond directly to the API client
                         script_result:CadScriptResult = result_or_timeout
-                        return self.library.set_result_in_cache_and_return(script_result)
+                        return self.library.set_script_result_in_cache_and_return(script_result)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
@@ -221,7 +221,6 @@ class ModelRequestHandler():
         return script_request
         
         
-
     def _setup_logger(self):
 
         self.logger = logging.getLogger(__name__)
