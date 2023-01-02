@@ -249,7 +249,7 @@ class ModelRequestHandler():
         result_script = CadScriptResult(**result_script_dict)
 
         print(f'COMPUTE DONE: script {result_script.name} {result_script.request.hash}')
-        await asyncio.sleep(1) # DEBUG
+        # TODO: handle the cache sets
 
         return result_script
 
