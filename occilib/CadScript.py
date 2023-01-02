@@ -24,7 +24,7 @@ class ModelRequest(BaseModel):
     hash:str = None # name+param+values hash id
     params: Dict[str, ParamInstance] = {}
     format: ModelFormat = 'step' # requested output format of the model
-    return_format: RequestResultFormat = None
+    output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
     meta: dict = {} # TODO
 

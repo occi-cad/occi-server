@@ -70,7 +70,7 @@ class ApiGenerator:
             
             # Main request handling
             req.script_name = script.name # this is important to identify the requested script
-            req.return_format = 'model' # return model for GET requests
+            #req.output = 'model' # return model for GET requests
             
             result = await self.request_handler.handle(req)
             return result

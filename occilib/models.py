@@ -36,11 +36,12 @@ class ScriptCadLanguage(str,Enum):
     openscad = 'openscad'
 
 class ModelFormat(str,Enum):
+    """ Also the extension """
     step = 'step'
     gltf = 'gltf'
     stl = 'stl'
 
-class ModelQuality(str,Enum):
+class ModelQuality(str,Enum): # TODO: not yet used
     low = 'low'
     medium = 'medium'
     high = 'high'
@@ -59,7 +60,7 @@ class ModelRequestInput(BaseModel):
     """
     script_name:str = None # script name
     format: ModelFormat = 'step'
-    return_format:RequestResultFormat = 'full' # either return full CadScript instance or only specific model
+    output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
 
 
 class ModelResult(BaseModel):

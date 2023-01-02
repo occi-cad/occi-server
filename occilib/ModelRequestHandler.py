@@ -11,9 +11,9 @@
 import time
 import logging
 from fastapi import HTTPException
-from starlette.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 
-from typing import Dict
+from typing import Dict, Any
 
 import asyncio
 from asgiref.sync import sync_to_async
@@ -66,12 +66,14 @@ class ModelRequestHandler():
         except Exception as e:
             return False
 
-    async def handle(self, req:ModelRequestInput):
+    async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
         """
             Handle request coming from API
             Prepare a CadScriptRequest instance with request in it
             and get from cache or submit to compute workers
         """
+
+        print(req)
 
         if req is None or not isinstance(req, ModelRequestInput):
             m = 'ModelRequestHandler::handle(script): No request received'
@@ -81,12 +83,21 @@ class ModelRequestHandler():
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
 
-        cached_script = self.library.get_cached(requested_script)
-        if cached_script:
-            # TODO: output_format: model or full
-            return cached_script
+        if self.library.is_cached(requested_script):
+            self.logger.info(f'**** {requested_script.name}: CACHE HIT ****')
+            # API user requested a full CadScriptResult response
+            if requested_script.request.output == 'full':
+                cached_script = self.library.get_cached_script(requested_script)
+                return cached_script
+            else:
+                # only a specific format model as output (we skip loading the result.json and serve the model file directly)
+                return self.library.get_cached_model(requested_script)
+
+
         else:
             # no cache - but already computing?
+            self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
+
             computing_task_id = self.library.check_cache_is_computing(requested_script.name, requested_script.hash())
             if computing_task_id:
                 # refer back to compute url
@@ -205,7 +216,7 @@ class ModelRequestHandler():
             raise HTTPException(500, detail=f'ModelRequestHandler::_req_to_script_request(req): Cannot get script "{req.script_name}" from library!')
 
         script_request.request.format = req.format
-        script_request.request.return_format = req.return_format # set format in which to return to API (full=json, model return results.models[{format}])
+        script_request.request.output = req.output # set format in which to return to API (full=json, model return results.models[{format}])
         # in req are also the flattened requested param values
         filled_params:Dict[str,ParamInstance] = {} 
         

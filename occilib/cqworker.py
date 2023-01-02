@@ -43,7 +43,6 @@ def compute_task(self,script:str): # json of CadScript
         cadquery.exporters.export(result, 'result.step', cadquery.exporters.ExportTypes.STEP)
         #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?
         cadquery.exporters.export(result, 'result.stl', cadquery.exporters.ExportTypes.STL)
-
         
 
         with open('result.step', 'r') as f:

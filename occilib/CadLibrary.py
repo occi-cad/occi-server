@@ -23,11 +23,12 @@ from datetime import datetime
 import json
 import base64
 
-from typing import List, Dict
+from typing import List, Dict, Any
 
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 
-from .CadScript import CadScript, CadScriptRequest, ModelRequest
+from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult
+from .models import ModelFormat
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
@@ -82,7 +83,6 @@ class CadLibrary:
             self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
         
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
-        print(script_request)
         return script_request
         
     def _setup_logger(self):
@@ -329,13 +329,70 @@ class CadLibrary:
 
         return base_script
 
-    #### HANDLING SCRIPT CONFIGS AND INSTANCES  ####
-
-    def get_cached(self, script:CadScript) -> bool:
-
-        return None
-
     #### CACHE OPERATIONS ####
+
+    def is_cached(self, script:CadScriptRequest) -> bool: 
+
+        return self._get_cached_script_file_path(script) is not None 
+
+        
+    def _get_cached_script_file_path(self, script:CadScriptRequest) -> str:
+        """
+            Get the result.json in the cache
+        """
+
+        cached_script_model_dir = self._get_script_cached_model_dir(script)
+        cached_script_model_file = f'{cached_script_model_dir}/result.json'
+        return cached_script_model_file if Path(cached_script_model_file).is_file() else None
+
+
+    def get_cached_script(self, script:CadScriptRequest) -> CadScriptResult:
+        """
+            See if we have a cached version of this CadScriptRequest
+        """
+        
+        cached_script_path = self._get_cached_script_file_path(script)
+        if cached_script_path is None:
+            self.logger.error(f'CadLibrary::get_cached_script: Can not get cached script with name "{script.name}"!')
+            return None
+        else:
+            with open(cached_script_path) as f:
+                cached_script_dict = json.loads(f.read())
+                cached_script = CadScriptResult(**cached_script_dict)
+                self._apply_single_model_format(cached_script)
+                return cached_script
+
+    def get_cached_model(self, script:CadScriptRequest) -> Any:
+
+        EXT_OUTPUT_TYPE = {
+            'step' : 'text',
+            'gltf' : 'binary',
+            'stl' : 'binary'
+        }
+
+        cached_script_dir = self._get_script_cached_model_dir(script)
+        cached_model_path = f'{cached_script_dir}/result.{script.request.format}'
+
+        if os.path.exists(cached_model_path) is False:
+            self.logger.error(f'CadLibrary::get_cached_model: Cannot get requested model from cache for script "{script.name}"')
+            return None
+        else:
+            output_model_filename = f'{script.name}-{script.hash()}.{script.request.format}'
+            return FileResponse(cached_model_path, filename=output_model_filename)
+
+
+    def _apply_single_model_format(self, script:CadScriptResult) -> CadScriptResult:
+
+        format = script.request.format
+        if format is None:
+            return script
+
+        needed_model_format = script.results.models[format]
+        script.results.models = {}
+        script.results.models[format] = needed_model_format
+
+        return script
+
 
     def set_cache_is_computing(self, script:CadScript, task_id:str):
         """
@@ -348,7 +405,7 @@ class CadLibrary:
             self.logger.error('CadLibrary::set_cache_computing(): Please supply a script instance with a .request!')
             return False
 
-        script_request_dir_path = self._get_script_cache_dir(script.name, script.hash())
+        script_request_dir_path = self._get_script_cached_model_dir(script)
         Path(script_request_dir_path).mkdir(parents=True, exist_ok=True) # check and make needed dirs if not exist
         # to avoid all kinds of problems clear the directory before writing the task file
         self._clear_dir(script_request_dir_path)
@@ -380,6 +437,10 @@ class CadLibrary:
                 False
 
         return False
+
+    def _get_script_cached_model_dir(self, script:CadScriptRequest) -> str:
+            
+            return f'{self._get_script_cache_dir(script.name)}/{script.hash()}'
     
     def _get_script_cache_dir(self, script_name:str) -> str:
         #  {library_path}/{component}/{component}-cache
@@ -409,7 +470,7 @@ class CadLibrary:
 
         return True
 
-    def set_script_result_in_cache_and_return(self, script_result:CadScript) -> Response: # return a raw Starlette/FastAPI response with json content
+    def set_script_result_in_cache_and_return(self, script_result:CadScriptResult) -> Response|FileResponse: # return a raw Starlette/FastAPI response with json content
 
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
         # place total JSON response in cache
@@ -426,8 +487,13 @@ class CadLibrary:
             stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
             f.write(stl_binary)
 
-        # TODO: depending on request.format and request.return_format return either full json or file
-        return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
+        # Depending on request.format and request.output return either full json or file
+        if script_result.request.output == 'full':
+            return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
+        else:
+            output_model_format = script_result.request.format
+            output_model_filename = f'{script_result.name}-{script_result.hash()}.{script_result.request.format}'
+            return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
 
 
     #### UTILS ####
