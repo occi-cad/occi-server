@@ -15,7 +15,7 @@ import base64
 import json
 import itertools
 
-from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat
+from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
 
 
@@ -47,6 +47,7 @@ class CadScript(BaseModel):
     prev_version:str = None
     safe:bool = False # if validated as safe code
     published:bool = True # if available to the public
+    units:ModelUnits = None
     params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText] = {} # list of param definitions - TODO: combine ParamTypes
     parameter_presets:Dict[str, Dict[str, ParamConfigNumber|ParamConfigText]] = {} # TODO: presets of parameters by variant name
     code: str  = None# the code of the CAD script
