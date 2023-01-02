@@ -22,6 +22,7 @@ import re
 from datetime import datetime
 import json
 import base64
+import asyncio
 
 from typing import List, Dict, Any
 
@@ -44,6 +45,7 @@ class CadLibrary:
     CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
     COMPUTE_FILE_EXT = '.compute'
 
+    request_handler = None # set when precomputing cache
     source = 'disk' # source of the scripts: disk or file (debug)
     path = DEFAULT_PATH # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
@@ -329,7 +331,7 @@ class CadLibrary:
 
         return base_script
 
-    #### CACHE OPERATIONS ####
+    #### BASIC CACHE OPERATIONS ####
 
     def is_cached(self, script:CadScriptRequest) -> bool: 
 
@@ -494,6 +496,57 @@ class CadLibrary:
             output_model_format = script_result.request.format
             output_model_filename = f'{script_result.name}-{script_result.hash()}.{script_result.request.format}'
             return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
+
+    #### CACHE PRE CALCULATION AND ADMIN ####
+
+    async def _make_compute_script_task(self, script:CadScript, param_values:dict) -> CadScriptResult:
+    
+        script_request = self._make_cache_compute_script_request(script, param_values)
+        script_result = await self.request_handler.compute_script_request(script_request)
+        return script_result
+
+
+    def compute_cache(self):
+        """
+            Compute and cache all results of cachable scripts in this library
+            NOTE: Cache management is centralized: We don't allow workers to write to cache!
+        """
+
+        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
+        self.request_handler = ModelRequestHandler(library=self)
+        
+        async_compute_tasks = []
+
+        for script in self.scripts:
+            if script.is_cachable():
+                param_values_sets = script.all_possible_model_params_dicts() # { hash : { param_name: value, .. }}
+
+                self.logger.info(f'==== COMPUTE CACHE FOR SCRIPT "{script.name}" [{len(param_values_sets.items())} models ]====')
+                
+                for hash,param_values in param_values_sets.items():
+                    # NOTE: hash is omitted
+                    async_compute_tasks.append(self._make_compute_script_task(script, param_values))
+    
+        loop = asyncio.get_event_loop()
+        tasks = asyncio.gather(*async_compute_tasks)
+        results  = loop.run_until_complete(tasks)
+        loop.close()
+        
+
+
+    def _make_cache_compute_script_request(self, script:CadScript, param_dict:dict) -> CadScriptRequest:
+
+        script_request = CadScriptRequest(**script.dict())
+        script_request.request.params = self.request_handler.param_dict_to_param_instance(param_dict)
+        script_request.request.hash = script_request.hash()
+
+        return script_request
+
+
+    def compute_cache_async(self):
+
+        # TODO: for use when API starts
+        pass
 
 
     #### UTILS ####

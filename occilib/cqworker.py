@@ -8,6 +8,7 @@ from dotenv import dotenv_values
 
 import cadquery
 from cadquery import cqgi
+from pathlib import Path
 
 from .CadScript import CadScriptResult
 from .models import ModelResult
@@ -18,6 +19,11 @@ CONFIG = dotenv_values()
 celery = Celery(__name__)
 celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL') or 'amqp://guest:pass@localhost:5672'
 celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 - TODO: move to redis?
+
+# IMPORTANT: set working directory outside the project dir 
+# we presume that cqworker will run in a docker container
+Path("/cqworkertmp").mkdir(parents=True, exist_ok=True)
+os.chdir('/cqworkertmp')
 
 @celery.task(name='compute_task', bind=True) # bind needed for retries
 def compute_task(self,script:str): # json of CadScript 
@@ -40,14 +46,18 @@ def compute_task(self,script:str): # json of CadScript
         result = build_result.results[-1].shape  # for now use the last result
 
         # output main formats: step (text), gltf (binary) and stl (binary) 
-        cadquery.exporters.export(result, 'result.step', cadquery.exporters.ExportTypes.STEP)
+        # !!!! IMPORTANT: all these files need to have unique filenames because Celery might run multiple versions within the same docker! !!!!
+        local_step_file = f'result_{script_result.request.hash}.step'
+        local_stl_file = f'result_{script_result.request.hash}.stl'
+
+        cadquery.exporters.export(result, local_step_file, cadquery.exporters.ExportTypes.STEP)
         #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?
-        cadquery.exporters.export(result, 'result.stl', cadquery.exporters.ExportTypes.STL)
+        cadquery.exporters.export(result, local_stl_file , cadquery.exporters.ExportTypes.STL)
         
 
-        with open('result.step', 'r') as f:
+        with open(local_step_file, 'r') as f:
             result_response.models['step'] = f.read()
-        os.remove('result.step') # to be sure: clean up
+        os.remove(local_step_file) # to be sure: clean up
 
         '''
         with open('result.gltf', 'rb') as f:
@@ -55,12 +65,13 @@ def compute_task(self,script:str): # json of CadScript
         os.remove('result.gltf') # to be sure: clean up
         '''
  
-        with open('result.stl', 'rb') as f:
+        with open(local_stl_file, 'rb') as f:
             result_response.models['stl'] = base64.b64encode(f.read()).decode('utf-8')
-        os.remove('result.stl') # to be sure: clean up
+        os.remove(local_stl_file) # to be sure: clean up
 
         script_result.results = result_response
         script_result.results.duration = round((time.time() - time_start) * 1000) # in ms 
+        script_result.results.task_id = str(self.request.id)
 
     #### END EXECUTION
 

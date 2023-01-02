@@ -8,6 +8,7 @@
 
 from typing import List, Any
 from pydantic import BaseModel
+import numpy
 
 from .models import ParamType, ModelUnits
 
@@ -28,6 +29,8 @@ class ParamConfigBase(BaseModel):
     default:Any = None # default value
     description:str = None
     units:ModelUnits = None
+    iterable:bool = True # if not, set in subclass
+
 
 class ParamConfigNumber(ParamConfigBase):
     """
@@ -37,14 +40,20 @@ class ParamConfigNumber(ParamConfigBase):
     end: float | int = 100
     step: float | int = 1
 
+    # TODO: We can also define an iterator for less memory usage?
+    def values(self) -> List[int|float]:
+        return numpy.arange(self.start, self.end+self.step, self.step).tolist()
+        
+
 class ParamConfigText(ParamConfigBase):
     """
         A text Param
     """
     min_length:int = 0
     max_length:int = 255
+    iterable = False
     
-
+    
 
 
     

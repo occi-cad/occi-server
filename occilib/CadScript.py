@@ -13,9 +13,11 @@ from pydantic import BaseModel
 import hashlib
 import base64
 import json
+import itertools
 
 from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
+
 
 class ModelRequest(BaseModel):
     """
@@ -52,7 +54,100 @@ class CadScript(BaseModel):
     script_cad_version:str = None # not used currently
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
 
+    def hash(self, params: Dict[str, ParamInstance]=None) -> str:
+        """
+            Hash a given dict of ParamInstance parameters. 
+            If not given we check if self is a CadScriptRequest and has request.params and use that
+        """
+        
+        # if params is not given we try to get is from the script.request
+        if params is None:
+            if not hasattr(self, 'request'):
+                self.logger.error('CadScript::hash(): Cannot get script hash because it has no request with parameter values yet!')
+                return None
+            if self.request is None:
+                self.logger.error('CadLibrary::hash(script): This CadScript is not an instance. We need request attribute too!')
+                return None
+
+            params = self.request.params
+
+        # NOTE: params can be None if no parameters
+        params_str = ''
+        if params and len(params.keys()) > 0:
+            for name,param in params.items():
+                params_str += f'{name}={json.dumps(dict(param))}&'
+        
+        hash = self._hash(self.name + params_str)
+        
+        # set hash on request too (if available)
+        if hasattr(self, 'request'):
+            self.request.hash = hash
+
+        return hash
+
+
+    def _hash(self, inp:str) -> str:
+        # TODO: research this hash function!
+        HASH_LENGTH_TRUNCATE = 11
+        return base64.urlsafe_b64encode(hashlib.md5(inp.encode()).digest())[:HASH_LENGTH_TRUNCATE].decode("utf-8")
+
+    def is_cachable(self) -> bool:
+        """
+            Return if the script is cachable by assessing its parameter configuration
+        """
+        for name,param in self.params.items():
+            if param.iterable is False:
+                return False
+        return True
+
     
+    def all_possible_model_params_dicts(self) -> Dict[str,dict]: # dict[model_hash, dict]
+        """
+            Get the parameter sets (in {'param_name':value} format) of all possible parametric models
+            Also return the model hash in key
+            Resulting return data: { 'hash1' : { param_name: value, {..} }, 'hash2' : {...}}
+        """
+
+        if self.is_cachable() is False:
+            return {}
+
+        all_values_per_parameter = []
+        for param in self.params.values():
+            all_values_per_parameter.append(param.values())
+
+        all_combinations = list(itertools.product(*all_values_per_parameter))
+        """ the combinations are generated from the starting value 
+            and then iterated from the last list to the first
+            
+            Example: 
+            - param1: [1,2,3,4,5]
+            - param2: [10,11,12]
+            combinations:
+                [[1,10],[1,11],[1,12],[2,10],[2,11],[2,12] etc] 
+        """
+
+        all_model_param_sets = {}
+
+        for combination in all_combinations:
+            param_values = {}
+            for index,value in enumerate(combination):
+                param_name = list(self.params.values())[index].name
+                param_values[param_name] = value
+
+            # place with hash 
+            # convert to Dict[ParamInstance] # TODO: remove this in between step eventually
+            param_set:Dict[Dict[ParamInstance]] = {}
+            for k,v in param_values.items():
+                param_set[k] = ParamInstance(value=v)
+
+            param_set_hash = self.hash(param_set)
+            all_model_param_sets[param_set_hash] = param_values
+
+        return all_model_param_sets
+                    
+
+
+
 class CadScriptRequest(CadScript):
     """
         CadScript that is used to make a request
@@ -60,34 +155,18 @@ class CadScriptRequest(CadScript):
     
     request:ModelRequest = ModelRequest() # just make an empty ModelRequest instance
 
-    def hash(self) -> str:
-
-        if not self.request:
-            self.logger.error('CadLibrary::hash(script): This CadScript is not an instance. We need request attribute too!')
-            return None
-        
-        params_str = ''
-        if self.request.params and len(self.request.params.keys()) > 0:
-            for name,param in self.request.params.items():
-                params_str += f'{name}={json.dumps(dict(param))}&'
-        
-        self.request.hash = self._hash(self.name + params_str)
-        return self.request.hash
-        
-    def _hash(self, inp:str) -> str:
-        # TODO: research this hash function!
-        HASH_LENGTH_TRUNCATE = 11
-        return base64.urlsafe_b64encode(hashlib.md5(inp.encode()).digest())[:HASH_LENGTH_TRUNCATE].decode("utf-8")
-
     def get_param_values_dict(self) -> dict:
+        """
+             Convert param values to Dict
+             request.params is in { name: { value: 'some value' }} format
+        """
         if self.request and type(self.request.params) is dict:
-            # params is in { name: { value: 'some value' }} format
+            
             param_values:dict = {}
             for k,v in self.request.params.items():
                 param_values[k] = v.value
 
             return param_values
-
 
 class CadScriptResult(CadScriptRequest):
     """

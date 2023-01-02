@@ -73,8 +73,6 @@ class ModelRequestHandler():
             and get from cache or submit to compute workers
         """
 
-        print(req)
-
         if req is None or not isinstance(req, ModelRequestInput):
             m = 'ModelRequestHandler::handle(script): No request received'
             self.logger.error(m)
@@ -171,7 +169,7 @@ class ModelRequestHandler():
                 with suppress(asyncio.CancelledError):
                     loop.run_until_complete(pending_coro)
             else:
-                # continue the compute result waiting routine
+                # continue the compute routine
                 loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
         
         if result is not None:
@@ -187,7 +185,7 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=False)() # includes results
+            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=True)() # includes results. thread_sensitive is needed!
             return compute_result
         return wrapper
 
@@ -217,7 +215,9 @@ class ModelRequestHandler():
 
         script_request.request.format = req.format
         script_request.request.output = req.output # set format in which to return to API (full=json, model return results.models[{format}])
+        
         # in req are also the flattened requested param values
+        # TODO: we will also enable using params={ name: val } in POST requests
         filled_params:Dict[str,ParamInstance] = {} 
         
         if script_request.params:
@@ -230,6 +230,31 @@ class ModelRequestHandler():
 
         # NOTE: script can also have no parameters!    
         return script_request
+
+    def param_dict_to_param_instance(self, param_dict:dict) -> ParamInstance:
+
+        params:Dict[str,ParamInstance] = {}
+        for k,v in param_dict.items():
+            params[k] = ParamInstance(value=v)
+
+        return params
+
+
+    #### CACHE PRE-CALCULATION ####
+
+    async def compute_script_request(self, script:CadScriptRequest) -> CadScriptResult:
+
+        task:AsyncResult = compute_task.apply_async(args=[], kwargs={ 'script' : script.json() })
+        result_script_dict = await self.result_to_async(task)()
+        result_script = CadScriptResult(**result_script_dict)
+
+        print(f'COMPUTE DONE: script {result_script.name} {result_script.request.hash}')
+        await asyncio.sleep(1) # DEBUG
+
+        return result_script
+
+
+    #### UTILS #### 
         
         
     def _setup_logger(self):
