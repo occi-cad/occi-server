@@ -3,6 +3,7 @@ version: '3'
 services:
   nginx:
     image: jonasal/nginx-certbot:latest
+    container_name: occi-nginx-certbot
     restart: unless-stopped
     environment:
       - CERTBOT_EMAIL
@@ -13,7 +14,53 @@ services:
       - 443:443
     volumes:
       - nginx_secrets:/etc/letsencrypt
-      - ./nginx.d:/etc/nginx/user_conf.d
+      - ./nginx.conf:/etc/nginx/user_conf.d
+
+ # TODO: proxy
+  # https://github.com/JonasAlfredsson/docker-nginx-certbot/
+
+  api:
+    restart: always
+    container_name: occi-rest-api
+    build: .
+    command: uvicorn main:app --app-dir=/occi --host 0.0.0.0
+    env_file:
+      - ./.env 
+    ports:
+      - "8090:8000" # same as local dev server for now
+    volumes:
+      - .:/occi
+
+  rmq:
+      restart: always
+      container_name: occi-rmq
+      image: rabbitmq:3-management
+      env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
+        - ./.env
+      ports:
+        - "5672:5672" # main - TODO: close when outside port
+        - "15672:15672" # dashboard - TODO: close when outside port
+
+  redis:
+      image: redis:7-alpine
+      container_name: occi-redis
+      ports: 
+        - "6379:6379" # TODO: close after DEBUG
+        
+
+  cqworker:
+    restart: always
+    container_name: cq-worker
+    build: .
+    command: celery -A occilib.cqworker.celery worker --loglevel=info
+    volumes: # remove this to load scripts into the image on build
+      - .:/occi
+    depends_on:
+      - rmq
+      - redis 
+
+  # TODO: ayworker in node
+
 
 volumes:
   nginx_secrets:

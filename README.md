@@ -22,6 +22,12 @@ You have now all the infrastructure available:
 * RabbitMQ: localhost:5672 and dashboard on 15672
 * Redis: localhost:6379
 
+## Production 
+
+```
+ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
 
 ## Definitions
 
