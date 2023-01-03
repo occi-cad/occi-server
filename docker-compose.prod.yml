@@ -2,7 +2,7 @@ version: '3'
 
 services:
   nginx:
-    image: jonasal/nginx-certbot:latest
+    image: jonasal/nginx-certbot:latest # see: https://github.com/JonasAlfredsson/docker-nginx-certbot
     container_name: occi-nginx-certbot
     restart: unless-stopped
     environment:
@@ -14,10 +14,7 @@ services:
       - 443:443
     volumes:
       - nginx_secrets:/etc/letsencrypt
-      - ./nginx.conf:/etc/nginx/user_conf.d
-
- # TODO: proxy
-  # https://github.com/JonasAlfredsson/docker-nginx-certbot/
+      - ./nginx.conf:/etc/nginx/user_conf.d/nginx.conf
 
   api:
     restart: always
