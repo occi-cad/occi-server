@@ -75,3 +75,6 @@ class ModelResult(BaseModel):
     messages:List[Any] = [] # TODO
     tables:Any = [] # TODO
     duration:int = None # in ms
+
+class SearchQueryInput(BaseModel):
+    q:str = None

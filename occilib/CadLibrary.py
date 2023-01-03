@@ -23,12 +23,14 @@ from datetime import datetime
 import json
 import base64
 import asyncio
+import tempfile
 
 from typing import List, Dict, Any
 
 from fastapi.responses import Response, FileResponse
 
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult
+from .CadLibrarySearch import CadLibrarySearch
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
@@ -45,6 +47,7 @@ class CadLibrary:
     COMPUTE_FILE_EXT = '.compute'
 
     request_handler = None # set when precomputing cache
+    searcher:CadLibrarySearch = None 
     source = 'disk' # source of the scripts: disk or file (debug)
     path = DEFAULT_PATH # absolute path to directory of CadScripts
     scripts:List[CadScript] = []
@@ -73,6 +76,9 @@ class CadLibrary:
 
         # clear all compute files in cache to avoid old stuff blocking new tasks
         self._clear_computing_files()
+
+        # initiate search index
+        self.searcher = CadLibrarySearch(library=self)
 
         self._print_library_overview()
 
@@ -481,8 +487,9 @@ class CadLibrary:
         script_result_json = script_result.json()
 
         # cache if cachable
-        if script_result.is_cachable():
-            result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
+        result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
+
+        if script_result.is_cachable():    
             # place total JSON response in cache
             Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
 
@@ -495,14 +502,28 @@ class CadLibrary:
                 stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
                 f.write(stl_binary)
 
+        # only allow requested format to be outputted
+        script_result = self._apply_single_model_format(script_result)
 
         # Depending on request.format and request.output return either full json or file
         if script_result.request.output == 'full':
-            return Response(content=script_result_json, media_type="application/json") # don't parse the content, just output
+            return Response(content=script_result.json(), media_type="application/json") # don't parse the content, just output
         else:
             output_model_format = script_result.request.format
             output_model_filename = f'{script_result.name}-{script_result.hash()}.{script_result.request.format}'
-            return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
+            if script_result.is_cachable(): 
+                # there is cache file present
+                return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
+            else:
+                FORMAT_TO_WRITE = { 'stl' : 'wb', 'gltf' : 'wb', 'step' : 'w' } 
+                model_content = script_result.results.models[script_result.request.format]
+                # parse base64 encoded binary to bytes
+                if FORMAT_TO_WRITE[output_model_format] == 'wb':
+                    model_content = base64.b64decode(model_content)
+
+                with tempfile.NamedTemporaryFile(mode=FORMAT_TO_WRITE[output_model_format], delete=False, suffix=f".{output_model_format}") as f:
+                    f.write(model_content)
+                    return FileResponse(f.name, filename=output_model_filename)
 
     #### CACHE PRE CALCULATION AND ADMIN ####
 
@@ -564,6 +585,11 @@ class CadLibrary:
         # TODO: for use when API starts
         pass
 
+    #### SEARCH ####
+
+    def search(self, q:str):
+
+        return self.searcher.search(q)
 
     #### UTILS ####
 

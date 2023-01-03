@@ -40,6 +40,7 @@ class CadScript(BaseModel):
     name:str # always lowercase
     author:str = None
     org:str = None
+    url:str = None # url of the endpoint where the script can be found
     description:str = None 
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
@@ -49,7 +50,7 @@ class CadScript(BaseModel):
     published:bool = True # if available to the public
     units:ModelUnits = None
     params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText] = {} # list of param definitions - TODO: combine ParamTypes
-    parameter_presets:Dict[str, Dict[str, ParamConfigNumber|ParamConfigText]] = {} # TODO: presets of parameters by variant name
+    parameter_presets:Dict[str, dict] = {} # TODO: presets of parameters by name and then a { param_name: value } dict
     code: str  = None# the code of the CAD script
     script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
     script_cad_version:str = None # not used currently

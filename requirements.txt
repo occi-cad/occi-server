@@ -7,3 +7,4 @@ nest-asyncio
 redis
 cadquery==2.2.0b1
 numpy
+whoosh

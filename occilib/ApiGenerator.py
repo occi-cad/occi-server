@@ -76,8 +76,6 @@ class ApiGenerator:
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
             
-        
-
 
 
     def _parse_script_dict(self, script:dict) -> CadScript:

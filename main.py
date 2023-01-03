@@ -1,10 +1,13 @@
 import uvicorn as uvicorn
 from starlette.responses import RedirectResponse
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from celery.result import AsyncResult
+
+from typing import List, Dict
 
 from occilib.CadLibrary import CadLibrary
 from occilib.ApiGenerator import ApiGenerator
+from occilib.models import SearchQueryInput
 
 # TMP GET SCRIPT FROM JSON
 library = CadLibrary('./scriptlibrary')
@@ -18,6 +21,7 @@ api_generator.generate_endpoints(api=app, scripts=scripts)
 async def index():
     return 'OCCI index'
 
+#### COMPUTING SCRIPTS STATUS ####
 @app.get('/{script_name}/{script_instance_hash}/status')
 async def get_model_compute_task(script_name:str, script_instance_hash:str):
     """
@@ -37,6 +41,24 @@ async def get_model_compute_task(script_name:str, script_instance_hash:str):
             return task_result.result # TODO: or redirect to original url (now with cache in place)
         else:
             return { 'task_id': task_result.id, 'task_status': task_result.status  } # TODO: stats like elapsed time?
+
+#### SEARCH ####
+@app.get('/search')
+async def search(inp:SearchQueryInput = Depends()) -> List[Dict]:
+    if inp.q is None: # return all scripts
+        return [s.dict() for s in library.scripts]
+    else:
+        return library.search(inp.q)
+
+@app.post('/search')
+async def search(inp:SearchQueryInput) -> List[Dict]:
+    if inp.q is None: # return all scripts
+        return [s.dict() for s in library.scripts]
+    else:
+        return library.search(inp.q)
+
+
+
 
 
 #### TEST SERVER ####
