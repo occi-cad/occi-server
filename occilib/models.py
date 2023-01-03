@@ -61,12 +61,13 @@ class ModelRequestInput(BaseModel):
     script_name:str = None # script name
     format: ModelFormat = 'step'
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
-    params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
+    # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
 
 
 class ModelResult(BaseModel):
     id:str = None # name + param hash = instance hash
+    success:bool = False
     task_id:str = None # set id of Celery task here
     request_id:str = None
     models:dict = {} # TODO Output models by format

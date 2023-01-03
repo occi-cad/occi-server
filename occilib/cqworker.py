@@ -41,37 +41,47 @@ def compute_task(self,script:str): # json of CadScript
     if script_result.script_cad_language == 'cadquery':
         param_values = script_result.get_param_values_dict()
         build_result = cqgi.parse(script_result.code).build(build_parameters=param_values, build_options={} )
+        # See docs for BuiltResult: https://github.com/CadQuery/cadquery/blob/master/cadquery/cqgi.py
         
-        # TODO: multiple calling show_object() populates a list of results: can we handle those?
-        result = build_result.results[-1].shape  # for now use the last result
+        if build_result.success is True:
+            # TODO: multiple calling show_object() populates a list of results: can we handle those?
+            result = build_result.results[-1].shape  # for now use the last result
 
-        # output main formats: step (text), gltf (binary) and stl (binary) 
-        # !!!! IMPORTANT: all these files need to have unique filenames because Celery might run multiple versions within the same docker! !!!!
-        local_step_file = f'result_{script_result.request.hash}.step'
-        local_stl_file = f'result_{script_result.request.hash}.stl'
 
-        cadquery.exporters.export(result, local_step_file, cadquery.exporters.ExportTypes.STEP)
-        #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?
-        cadquery.exporters.export(result, local_stl_file , cadquery.exporters.ExportTypes.STL)
+            # output main formats: step (text), gltf (binary) and stl (binary) 
+            local_step_file = f'result_{script_result.request.hash}.step'
+            local_stl_file = f'result_{script_result.request.hash}.stl'
+
+            cadquery.exporters.export(result, local_step_file, cadquery.exporters.ExportTypes.STEP)
+            #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?
+            cadquery.exporters.export(result, local_stl_file , cadquery.exporters.ExportTypes.STL)
+            
+
+            with open(local_step_file, 'r') as f:
+                result_response.models['step'] = f.read()
+            os.remove(local_step_file) # to be sure: clean up
+
+            '''
+            with open('result.gltf', 'rb') as f:
+                result_response.models['gltf'] = base64.b64encode(f.read()).decode('utf-8')
+            os.remove('result.gltf') # to be sure: clean up
+            '''
+    
+            with open(local_stl_file, 'rb') as f:
+                result_response.models['stl'] = base64.b64encode(f.read()).decode('utf-8')
+            os.remove(local_stl_file) # to be sure: clean up
+            result_response.success = True
         
+        # there was an error
+        else:
+            result_response.success = False
+            result_response.errors.append(str(build_result.exception))
 
-        with open(local_step_file, 'r') as f:
-            result_response.models['step'] = f.read()
-        os.remove(local_step_file) # to be sure: clean up
-
-        '''
-        with open('result.gltf', 'rb') as f:
-            result_response.models['gltf'] = base64.b64encode(f.read()).decode('utf-8')
-        os.remove('result.gltf') # to be sure: clean up
-        '''
- 
-        with open(local_stl_file, 'rb') as f:
-            result_response.models['stl'] = base64.b64encode(f.read()).decode('utf-8')
-        os.remove(local_stl_file) # to be sure: clean up
-
+        # finalize and return CadScriptResult as json
+        result_response.duration = round((time.time() - time_start) * 1000) # in ms 
+        result_response.task_id = str(self.request.id)
         script_result.results = result_response
-        script_result.results.duration = round((time.time() - time_start) * 1000) # in ms 
-        script_result.results.task_id = str(self.request.id)
+        
 
     #### END EXECUTION
 

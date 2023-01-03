@@ -173,7 +173,7 @@ class CadScriptResult(CadScriptRequest):
     """
         CadScript that has been through compute and has results
     """
-    results:ModelResult = None
+    results:ModelResult = ModelResult()
     
 
 

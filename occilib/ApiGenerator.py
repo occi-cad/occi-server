@@ -6,7 +6,7 @@
 
 from typing import List
 from fastapi import FastAPI, Depends
-from pydantic import create_model, conint
+from pydantic import create_model, conint, constr
 import logging
 
 from .CadScript import CadScript
@@ -15,6 +15,7 @@ from .ModelRequestHandler import ModelRequestHandler
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText
 from .models import ModelRequestInput
 
+from .settings import params as PARAM_SETTINGS
 
 class ApiGenerator:
 
@@ -64,24 +65,17 @@ class ApiGenerator:
         # we generate specific input models that handle param names: bracket?width=10
         SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
         
-        # make both GET and POST endpoints
+        # make both GET and POST dynamic endpoints
         @api.get(f'/{script.name}', tags=[script.name])
         async def get_model_get(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
-            
-            # Main request handling
             req.script_name = script.name # this is important to identify the requested script
-            #req.output = 'model' # return model for GET requests
-            
-            result = await self.request_handler.handle(req)
-            return result
+            return await self.request_handler.handle(req)
 
         @api.post(f'/{script.name}', tags=[script.name])
-        async def get_model_post(req:SpecificEndpointInputModel=Depends()):
-            
-            # Main request handling
+        async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
             req.script_name = script.name # this is important to identify the requested script
-            return self.request_handler.handle(req)
-
+            return await self.request_handler.handle(req)
+            
         
 
 
@@ -114,7 +108,7 @@ class ApiGenerator:
 
             if field_type:
                 field_def = self._param_to_field_def(param)
-                fields[param.name] = (field_def, param.default or param.start ) # here we plug the default value too
+                fields[param.name] = (field_def, param.default ) # here we plug the default value too
 
         # now make the Pydantic Input model definition
         EndpointInputModel = create_model(
@@ -142,12 +136,17 @@ class ApiGenerator:
         return None
         
     def _param_to_field_def(self, param:ParamConfigNumber|ParamConfigText): # TODO: typing
-
+        """
+            Convert Param to Pydantic Field Type for dynamic parameters
+            See: https://docs.pydantic.dev/usage/types
+        """
         if param.type == 'number':
             return conint(ge=param.start, le=param.end, multiple_of=param.step)
         elif param.type == 'text':
-            # TODO
-            return None
+            return constr(strip_whitespace=True, 
+                            strict=True, 
+                            min_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MINLENGTH'], 
+                            max_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MAXLENGTH'])
 
     def _add_api_tags(self, script:dict):
 

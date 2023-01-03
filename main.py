@@ -7,7 +7,7 @@ from occilib.CadLibrary import CadLibrary
 from occilib.ApiGenerator import ApiGenerator
 
 # TMP GET SCRIPT FROM JSON
-library = CadLibrary('./components')
+library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
 
 api_generator = ApiGenerator(library)

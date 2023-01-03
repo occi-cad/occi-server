@@ -1,0 +1,6 @@
+#### GENERAL SETTINGS ####
+
+params = {
+    'PARAM_INPUT_TEXT_MAXLENGTH' : 10,
+    'PARAM_INPUT_TEXT_MINLENGTH' : 0
+}

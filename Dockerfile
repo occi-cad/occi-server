@@ -6,6 +6,10 @@ RUN apt-get update && apt-get install -y \
 	libgl1 \
 	libgl1-mesa-glx
 
+# Make sure we got some fonts
+RUN apt-get update; apt-get install -y fontconfig
+RUN fc-cache -f -v
+
 # set work directory
 WORKDIR /occi
 

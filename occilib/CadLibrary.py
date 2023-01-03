@@ -29,12 +29,11 @@ from typing import List, Dict, Any
 from fastapi.responses import Response, FileResponse
 
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult
-from .models import ModelFormat
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
 
-    DEFAULT_PATH = './components' # relative to script
+    DEFAULT_PATH = './scriptlibrary' # relative to script
     FILE_STRUCTURE_TEMPLATES = [
         r'{org}/{author}/{component}/{script}',
         r'{author}/{component}/{script}',
@@ -353,7 +352,8 @@ class CadLibrary:
             See if we have a cached version of this CadScriptRequest
         """
         
-        cached_script_path = self._get_cached_script_file_path(script)
+        cached_script_path = self._get_cached_script_file_path(script) # result.json
+
         if cached_script_path is None:
             self.logger.error(f'CadLibrary::get_cached_script: Can not get cached script with name "{script.name}"!')
             return None
@@ -361,6 +361,8 @@ class CadLibrary:
             with open(cached_script_path) as f:
                 cached_script_dict = json.loads(f.read())
                 cached_script = CadScriptResult(**cached_script_dict)
+                # take over the request data 
+                cached_script.request = script.request
                 self._apply_single_model_format(cached_script)
                 return cached_script
 
@@ -386,17 +388,19 @@ class CadLibrary:
     def _apply_single_model_format(self, script:CadScriptResult) -> CadScriptResult:
 
         format = script.request.format
+
         if format is None:
             return script
 
         needed_model_format = script.results.models[format]
+
         script.results.models = {}
         script.results.models[format] = needed_model_format
 
         return script
 
 
-    def set_cache_is_computing(self, script:CadScript, task_id:str):
+    def set_script_model_is_computing(self, script:CadScript, task_id:str):
         """
             Set computing status in library cache for this script and parameter hash
             This is needed to avoid computing things twice when requests are shortly after each other
@@ -404,7 +408,7 @@ class CadLibrary:
         """
 
         if not isinstance(script.request, ModelRequest):
-            self.logger.error('CadLibrary::set_cache_computing(): Please supply a script instance with a .request!')
+            self.logger.error('CadLibrary::set_script_model_is_computing(): Please supply a script instance with a .request!')
             return False
 
         script_request_dir_path = self._get_script_cached_model_dir(script)
@@ -417,7 +421,7 @@ class CadLibrary:
 
         return True
 
-    def check_cache_is_computing(self, script_name:str, script_instance_hash:str) -> str|bool:
+    def check_script_model_is_computing(self, script_name:str, script_instance_hash:str) -> str|bool:
         """
             Check if a specific script model request is computing
             Return task_id or False
@@ -431,7 +435,7 @@ class CadLibrary:
                 first_file = files[0]
                 path, ext = os.path.splitext(first_file)
                 if ext == self.COMPUTE_FILE_EXT: # .compute extension for robustness
-                    self.logger.info(f'ModelRequestHandler::check_cache_is_computing: Found computing. task_id = "{files[0]}"')
+                    self.logger.info(f'ModelRequestHandler::check_script_model_is_computing: Found computing. task_id = "{files[0]}"')
                     return files[0].replace(self.COMPUTE_FILE_EXT, '') # return name of file, which is the task_id
                 else:
                     return False # probably cached files
@@ -473,7 +477,7 @@ class CadLibrary:
         return True
 
     def set_script_result_in_cache_and_return(self, script_result:CadScriptResult) -> Response|FileResponse: # return a raw Starlette/FastAPI response with json content
-
+        
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
         # place total JSON response in cache
         Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
@@ -499,10 +503,19 @@ class CadLibrary:
 
     #### CACHE PRE CALCULATION AND ADMIN ####
 
-    async def _make_compute_script_task(self, script:CadScript, param_values:dict) -> CadScriptResult:
+    async def _submit_and_handle_compute_script_task(self, script:CadScript, param_values:dict) -> CadScriptResult:
+        """
+            Submit script to compute workers and wait and handle the result asynchronously 
+            The result is set in the cache on disk
+        """
     
         script_request = self._make_cache_compute_script_request(script, param_values)
         script_result = await self.request_handler.compute_script_request(script_request)
+        
+        self.set_script_result_in_cache_and_return(script_result)
+
+        self.logger.info(f'CadLibrary::_submit_compute_script_task(): Script "{script_result.name}": model "{script_result.request.hash}" succesfully computed and cached. Took: {script_result.results.duration} ms')
+
         return script_result
 
 
@@ -521,15 +534,15 @@ class CadLibrary:
             if script.is_cachable():
                 param_values_sets = script.all_possible_model_params_dicts() # { hash : { param_name: value, .. }}
 
-                self.logger.info(f'==== COMPUTE CACHE FOR SCRIPT "{script.name}" [{len(param_values_sets.items())} models ]====')
+                self.logger.info(f'==== START COMPUTE CACHE FOR SCRIPT "{script.name}" with {len(param_values_sets.items())} models ====')
                 
                 for hash,param_values in param_values_sets.items():
                     # NOTE: hash is omitted
-                    async_compute_tasks.append(self._make_compute_script_task(script, param_values))
+                    async_compute_tasks.append(self._submit_and_handle_compute_script_task(script, param_values))
     
         loop = asyncio.get_event_loop()
         tasks = asyncio.gather(*async_compute_tasks)
-        results  = loop.run_until_complete(tasks)
+        loop.run_until_complete(tasks) # results are already handled
         loop.close()
         
 

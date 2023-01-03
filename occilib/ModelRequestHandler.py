@@ -82,7 +82,7 @@ class ModelRequestHandler():
         requested_script.hash() # set hash based on params
 
         if self.library.is_cached(requested_script):
-            self.logger.info(f'**** {requested_script.name}: CACHE HIT ****')
+            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] ****')
             # API user requested a full CadScriptResult response
             if requested_script.request.output == 'full':
                 cached_script = self.library.get_cached_script(requested_script)
@@ -96,7 +96,7 @@ class ModelRequestHandler():
             # no cache - but already computing?
             self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
 
-            computing_task_id = self.library.check_cache_is_computing(requested_script.name, requested_script.hash())
+            computing_task_id = self.library.check_script_model_is_computing(requested_script.name, requested_script.hash())
             if computing_task_id:
                 # refer back to compute url
                 return self.go_to_computing_url(requested_script,computing_task_id, set_compute_status=False)
@@ -112,7 +112,12 @@ class ModelRequestHandler():
                     else:
                         # we got a compute result in time to respond directly to the API client
                         script_result:CadScriptResult = result_or_timeout
-                        return self.library.set_script_result_in_cache_and_return(script_result)
+                        if script_result.results.success is True:
+                            return self.library.set_script_result_in_cache_and_return(script_result)
+                        else:
+                            errors_str = ','.join(script_result.results.errors)
+                            raise HTTPException(status_code=404, 
+                                detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
@@ -196,7 +201,7 @@ class ModelRequestHandler():
             and then automatically gets redirected
         """
         if set_compute_status:
-            self.library.set_cache_is_computing(script, task_id)
+            self.library.set_script_model_is_computing(script, task_id)
 
         return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}')
 
@@ -247,9 +252,6 @@ class ModelRequestHandler():
         task:AsyncResult = compute_task.apply_async(args=[], kwargs={ 'script' : script.json() })
         result_script_dict = await self.result_to_async(task)()
         result_script = CadScriptResult(**result_script_dict)
-
-        print(f'COMPUTE DONE: script {result_script.name} {result_script.request.hash}')
-        # TODO: handle the cache sets
 
         return result_script
 
