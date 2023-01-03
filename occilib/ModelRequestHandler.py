@@ -113,7 +113,7 @@ class ModelRequestHandler():
                         # we got a compute result in time to respond directly to the API client
                         script_result:CadScriptResult = result_or_timeout
                         if script_result.results.success is True:
-                            return self.library.set_script_result_in_cache_and_return(script_result)
+                            return self.library.checkin_script_result_in_cache_and_return(script_result)
                         else:
                             errors_str = ','.join(script_result.results.errors)
                             raise HTTPException(status_code=404, 
