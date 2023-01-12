@@ -9,7 +9,9 @@ from occilib.CadLibrary import CadLibrary
 from occilib.ApiGenerator import ApiGenerator
 from occilib.models import SearchQueryInput
 
-# TMP GET SCRIPT FROM JSON
+from dotenv import dotenv_values
+CONFIG = dotenv_values()  
+
 library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
 
@@ -19,7 +21,11 @@ api_generator.generate_endpoints(api=app, scripts=scripts)
 
 @app.get("/")
 async def index():
-    return 'OCCI index'
+    return {
+        'library': CONFIG['OCCI_LIBRARY_NAME'],
+        'maintainer': CONFIG['OCCI_LIBRARY_MAINTAINER'],
+        'maintainer_email': CONFIG['OCCI_LIBRARY_MAINTAINER_EMAIL'],
+    }
 
 #### COMPUTING SCRIPTS STATUS ####
 @app.get('/{script_name}/{script_instance_hash}/status')
