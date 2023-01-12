@@ -25,7 +25,7 @@ You have now all the infrastructure available:
 ## Production 
 
 ```
- docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 

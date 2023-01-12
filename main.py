@@ -58,9 +58,6 @@ async def search(inp:SearchQueryInput) -> List[Dict]:
         return library.search(inp.q)
 
 
-
-
-
 #### TEST SERVER ####
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8090, workers=1)
