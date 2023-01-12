@@ -22,9 +22,9 @@ api_generator.generate_endpoints(api=app, scripts=scripts)
 @app.get("/")
 async def index():
     return {
-        'library': CONFIG['OCCI_LIBRARY_NAME'],
-        'maintainer': CONFIG['OCCI_LIBRARY_MAINTAINER'],
-        'maintainer_email': CONFIG['OCCI_LIBRARY_MAINTAINER_EMAIL'],
+        'library': CONFIG.get('OCCI_LIBRARY_NAME', 'unnamed OCCI library. See settings in .env'),
+        'maintainer': CONFIG.get('OCCI_LIBRARY_MAINTAINER'),
+        'maintainer_email': CONFIG.get('OCCI_LIBRARY_MAINTAINER_EMAIL'),
     }
 
 #### COMPUTING SCRIPTS STATUS ####

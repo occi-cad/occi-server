@@ -28,7 +28,7 @@ from .Param import ParamConfigBase, ParamInstance
 from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
-from .cqworker import compute_task
+from .cqworker import compute_job_cadquery
 
 nest_asyncio.apply() # enables us to plug into running loop of FastApi
 
@@ -65,6 +65,22 @@ class ModelRequestHandler():
             return self.celery_connected
         except Exception as e:
             return False
+
+    def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
+
+        TASK_METHODS_BY_ENGINE = {
+            'cadquery' : compute_job_cadquery, 
+            # TODO: archiyou
+        }
+        DEFAULT_ENGINE = 'cadquery'
+
+        task_method = TASK_METHODS_BY_ENGINE.get(requested_script.script_cad_language)
+        if task_method is None:
+            self.logger.error(f'ModelRequestHandler::get_celery_task_method: Cannot get Celery task method: script_cad_language "{requested_script.script_cad_language}" is unknown! Defaulted to "cadquery"')
+            task_method = TASK_METHODS_BY_ENGINE[DEFAULT_ENGINE]
+        
+        return task_method
+
 
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
         """
@@ -103,7 +119,7 @@ class ModelRequestHandler():
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
-                    task:AsyncResult = compute_task.apply_async(args=[], kwargs={ 'script' : requested_script.json() })
+                    task:AsyncResult = self.get_celery_task_method(requested_script).apply_async(args=[], kwargs={ 'script' : requested_script.json() })
                     result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
 
                     # wait time is over before compute could finish:
@@ -249,7 +265,7 @@ class ModelRequestHandler():
 
     async def compute_script_request(self, script:CadScriptRequest) -> CadScriptResult:
 
-        task:AsyncResult = compute_task.apply_async(args=[], kwargs={ 'script' : script.json() })
+        task:AsyncResult = self.get_celery_task_method(script).apply_async(args=[], kwargs={ 'script' : script.json() })
         result_script_dict = await self.result_to_async(task)()
         result_script = CadScriptResult(**result_script_dict)
 

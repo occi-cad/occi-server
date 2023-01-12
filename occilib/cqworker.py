@@ -25,8 +25,8 @@ celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://local
 Path("/cqworkertmp").mkdir(parents=True, exist_ok=True)
 os.chdir('/cqworkertmp')
 
-@celery.task(name='compute_task', bind=True) # bind needed for retries
-def compute_task(self,script:str): # json of CadScript 
+@celery.task(name='compute.cadquery', bind=True) # bind needed for retries
+def compute_job_cadquery(self,script:str): # json of CadScript 
     time_start = time.time()
     script_result = CadScriptResult(**json.loads(script)) # parse CadScriptRequest json as CadScciptResult
     result_response = ModelResult()

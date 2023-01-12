@@ -23,7 +23,7 @@ from typing import Any, List
 
 from .CadScript import CadScript
 
-CONFIG = dotenv_values()  
+CONFIG = dotenv_values()
 
 class CadLibrarySearch:
 
