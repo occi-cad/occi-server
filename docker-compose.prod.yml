@@ -24,7 +24,7 @@ services:
     env_file:
       - ./.env 
     ports:
-      - "8090:8000" # same as local dev server for now
+      - "8090" # same as local dev server for now
     volumes:
       - .:/occi
 
@@ -35,14 +35,14 @@ services:
       env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
         - ./.env
       ports:
-        - "5672:5672" # main - TODO: close when outside port
-        - "15672:15672" # dashboard - TODO: close when outside port
+        - "5672" # main
+        - "15672" # dashboard
 
   redis:
       image: redis:7-alpine
       container_name: occi-redis
       ports: 
-        - "6379:6379" # TODO: close after DEBUG
+        - "6379" # TODO: close after DEBUG
         
 
   cqworker:
