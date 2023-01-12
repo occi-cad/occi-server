@@ -2,6 +2,7 @@ import os
 import json # TODO: use orjson?
 import base64
 import time
+import random
 
 from celery import Celery # docs: https://docs.celeryq.dev/en/stable/userguide/tasks.html#basics
 from dotenv import dotenv_values
@@ -49,8 +50,10 @@ def compute_job_cadquery(self,script:str): # json of CadScript
 
 
             # output main formats: step (text), gltf (binary) and stl (binary) 
-            local_step_file = f'result_{script_result.request.hash}.step'
-            local_stl_file = f'result_{script_result.request.hash}.stl'
+            # NOTE: To be safe add extra random token to filename for collisions between making the file and deleting (for example when requests are cancelled)
+            random_token = random.randint(0, 1000000)
+            local_step_file = f'result_{script_result.request.hash}_{random_token}.step' 
+            local_stl_file = f'result_{script_result.request.hash}_{random_token}.stl'
 
             cadquery.exporters.export(result, local_step_file, cadquery.exporters.ExportTypes.STEP)
             #cadquery.exporters.export(build_result, 'result.gltf', cadquery.exporters.ExportTypes.GLTF) # not in yet?

@@ -15,6 +15,10 @@ services:
       - "8090:8000" # same as local dev server for now
     volumes:
       - .:/occi
+    depends_on:
+       - rmq
+       - redis 
+       - cqworker
 
   rmq:
       restart: always
