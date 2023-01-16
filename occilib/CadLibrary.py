@@ -398,10 +398,14 @@ class CadLibrary:
         if format is None:
             return script
 
-        needed_model_format = script.results.models[format]
+        needed_model_format = script.results.models.get(format)
 
         script.results.models = {}
-        script.results.models[format] = needed_model_format
+
+        if needed_model_format:
+            script.results.models[format] = needed_model_format
+        else:
+            self.logger.error(f'CadLibrary::_apply_single_model_format: No model in format {format} found!')
 
         return script
 
@@ -494,13 +498,22 @@ class CadLibrary:
             Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
 
             # save results to file
-            with open(f'{result_cache_dir}/result.json', 'w') as f:
-                f.write(script_result_json)
-            with open(f'{result_cache_dir}/result.step', 'w') as f:
-                f.write(script_result.results.models['step'])
-            with open(f'{result_cache_dir}/result.stl', 'wb') as f:
-                stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
-                f.write(stl_binary)
+            if len(script_result.results.models.keys()) > 0: # only when some models as results
+                with open(f'{result_cache_dir}/result.json', 'w') as f:
+                    f.write(script_result_json)
+                if script_result.results.models.get('step'):
+                    with open(f'{result_cache_dir}/result.step', 'w') as f:
+                        f.write(script_result.results.models['step'])
+                if script_result.results.models.get('stl'):
+                    with open(f'{result_cache_dir}/result.stl', 'wb') as f:
+                        stl_binary = base64.b64decode(script_result.results.models['stl']) # decode base64
+                        f.write(stl_binary)
+                if script_result.results.models.get('gltf'):
+                    with open(f'{result_cache_dir}/result.gltf', 'wb') as f:
+                        gltf_binary = base64.b64decode(script_result.results.models['gltf']) # decode base64
+                        f.write(gltf_binary)
+            else:
+                self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
 
         # only allow requested format to be outputted
         script_result = self._apply_single_model_format(script_result)
@@ -516,14 +529,18 @@ class CadLibrary:
                 return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
             else:
                 FORMAT_TO_WRITE = { 'stl' : 'wb', 'gltf' : 'wb', 'step' : 'w' } 
-                model_content = script_result.results.models[script_result.request.format]
-                # parse base64 encoded binary to bytes
-                if FORMAT_TO_WRITE[output_model_format] == 'wb':
-                    model_content = base64.b64decode(model_content)
+                model_content = script_result.results.models.get(script_result.request.format)
 
-                with tempfile.NamedTemporaryFile(mode=FORMAT_TO_WRITE[output_model_format], delete=False, suffix=f".{output_model_format}") as f:
-                    f.write(model_content)
-                    return FileResponse(f.name, filename=output_model_filename)
+                if model_content:
+                    # parse base64 encoded binary to bytes
+                    if FORMAT_TO_WRITE[output_model_format] == 'wb':
+                        model_content = base64.b64decode(model_content)
+
+                    with tempfile.NamedTemporaryFile(mode=FORMAT_TO_WRITE[output_model_format], delete=False, suffix=f".{output_model_format}") as f:
+                        f.write(model_content)
+                        return FileResponse(f.name, filename=output_model_filename)
+                else:
+                    return { 'status' : 'error', 'message' : f'No valid output model in {format}. Please contact the administrator!' }
 
     #### CACHE PRE CALCULATION AND ADMIN ####
 

@@ -1,5 +1,6 @@
 #### ON DISK COMPONENT LIBRARY ####
 # ./components # eventually add this to .gitignore
+./archiyou-compute-worker
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
