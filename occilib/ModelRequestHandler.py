@@ -56,7 +56,7 @@ class ModelRequestHandler():
             self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
         else:
             self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
-            self._set_celery_routing()
+            # self._set_celery_routing() # DEBUG FIRST!
         
 
     def check_celery(self) -> bool:
