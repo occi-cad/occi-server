@@ -53,7 +53,7 @@ services:
     restart: always
     container_name: cq-worker
     build: .
-    command: celery -A occilib.cqworker.celery worker -Q cadquery --loglevel=info
+    command: celery -A occilib.cqworker.celery worker --loglevel=info # -Q cadquery 
     volumes: # remove this to load scripts into the image on build
       - .:/occi
     depends_on:
