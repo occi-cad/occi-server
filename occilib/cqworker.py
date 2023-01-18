@@ -14,12 +14,15 @@ from pathlib import Path
 from .CadScript import CadScriptResult
 from .models import ModelResult
 
-
 CONFIG = dotenv_values()  
 
 celery = Celery(__name__)
 celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL') or 'amqp://guest:pass@localhost:5672'
 celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 - TODO: move to redis?
+celery.conf.task_routes = {
+            'cadquery.*': {'queue': 'cadquery'},
+            'archiyou.*': {'queue': 'archiyou'}
+        }
 
 # IMPORTANT: set working directory outside the project dir 
 # we presume that cqworker will run in a docker container

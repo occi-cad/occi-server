@@ -29,7 +29,7 @@ from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
 from .cqworker import compute_job_cadquery
-#from .aycomputetask import compute_job_archiyou
+from .aycomputetask import compute_job_archiyou
 
 nest_asyncio.apply() # enables us to plug into running loop of FastApi
 
@@ -42,6 +42,7 @@ class ModelRequestHandler():
     #### END SETTINGS
 
     library:CadLibrary
+    celery = None
     celery_connected:bool = False
 
     def __init__(self, library:CadLibrary):
@@ -56,7 +57,6 @@ class ModelRequestHandler():
             self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
         else:
             self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
-            # self._set_celery_routing() # DEBUG FIRST!
         
 
     def check_celery(self) -> bool:
@@ -68,18 +68,11 @@ class ModelRequestHandler():
         except Exception as e:
             return False
 
-    def _set_celery_routing(self):
-
-        celery.current_app.task_routes = ([
-            {'cadquery.*': {'queue': 'cadquery'}},
-            #{'archiyou.*': {'queue': 'archiyou'}}
-        ])
-
     def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
 
         TASK_METHODS_BY_ENGINE = {
             'cadquery' : compute_job_cadquery, 
-            #'archiyou' : compute_job_archiyou,
+            'archiyou' : compute_job_archiyou,
         }
         DEFAULT_ENGINE = 'cadquery'
 
