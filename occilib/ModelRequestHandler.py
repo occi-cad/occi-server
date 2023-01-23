@@ -8,7 +8,6 @@
 
 """
 
-import time
 import logging
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
@@ -20,7 +19,6 @@ from asgiref.sync import sync_to_async
 import nest_asyncio # see:  https://github.com/erdewit/nest_asyncio
 from contextlib import suppress
 
-import celery
 from celery.result import AsyncResult
 
 from .models import ModelRequestInput
@@ -28,8 +26,13 @@ from .Param import ParamConfigBase, ParamInstance
 from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
-from .cqworker import compute_job_cadquery
-from .aycomputetask import compute_job_archiyou
+from .celery_tasks import celery as celery_app
+from .celery_tasks import compute_job_cadquery,compute_job_archiyou
+
+from kombu import Exchange, Queue, Connection
+
+from dotenv import dotenv_values
+CONFIG = dotenv_values()  
 
 nest_asyncio.apply() # enables us to plug into running loop of FastApi
 
@@ -38,12 +41,14 @@ class ModelRequestHandler():
     #### SETTINGS ####
     WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT = 3
     REDIRECTING_COMPUTING_STATE = 'status'
+    CAD_SCRIPT_ENGINES = ['cadquery', 'archiyou']
 
     #### END SETTINGS
 
     library:CadLibrary
-    celery = None
+    celery = celery_app # from import celery_tasks
     celery_connected:bool = False
+    available_scriptengine_workers = [] # cadquery, archiyou = queue names
 
     def __init__(self, library:CadLibrary):
             
@@ -53,19 +58,77 @@ class ModelRequestHandler():
         if not isinstance(self.library, CadLibrary):
             self.logger.error('ModelRequestHandler::__init__(library): Please supply library!') 
 
+        self.setup_exchanges()
+
         if self.check_celery() is False:
             self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
         else:
             self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
         
+        self.celery.autodiscover_tasks() # discover tasks
+
+    def setup_exchanges(self):
+        '''
+            Manually set up exchanges and bindings
+            This is somewhat hacky. Archiyou exhange is not setup automatically (because worker is running nodejs)
+        '''
+        conn = self.celery._acquire_connection()                                                                                                                                                                       
+        exchange = Exchange("archiyou", type="direct", channel=conn.channel())                                                                                                                                                                                      
+        queue = Queue(name="archiyou", exchange=exchange, routing_key="archiyou")                                                                                                                                                                   
+        queue.maybe_bind(conn)                                                                                                                                                                                                                      
+        queue.declare() 
+
 
     def check_celery(self) -> bool:
+        '''
+            Check if Celery can connect to its backend(s) and if there are workers for both cad script engines
+        '''
 
         try:
-            celery.current_app.control.inspect().ping()
+            self.logger.info('**** CHECKING CELERY CONNECTIONS ****')
+            
+            self.celery.control.inspect(timeout=1.0).ping()
             self.celery_connected = True
+            self.logger.info('ModelRequestHandler::check_celery: Connected to RMQ backend!')
+            
+            # check connected workers and their queues (see: https://docs.celeryq.dev/en/stable/_modules/celery/app/control.html#Inspect)
+            if self.celery.control.inspect().active_queues() is None:
+                self.logger.error('ModelRequestHandler::check_celery: No workers connected to compute queues')
+                return False
+
+            # NOTE: inspecting active queues do not work with archiyou node-celery worker
+            if self.test_archiyou_worker() is True:
+                if 'archiyou' not in self.available_scriptengine_workers:
+                    self.available_scriptengine_workers.append('archiyou') 
+            
+            for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
+                queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
+                if queue_name:
+                    self.logger.info(f'* Worker "{worker_host}" connected to queue: "{queue_name}"')
+                    if queue_name not in self.available_scriptengine_workers:
+                        self.available_scriptengine_workers.append(queue_name)
+
+            script_engine_list = '\n - '.join(self.available_scriptengine_workers)
+            self.logger.info(f'*** Connected workers for script engine: \n - {script_engine_list}')
+            for engine in self.CAD_SCRIPT_ENGINES:
+                if engine not in self.available_scriptengine_workers:
+                    self.logger.error(f'ModelRequestHandler::check_celery: Cad engine "{engine}" has no workers available!')
+                    return False
+
             return self.celery_connected
+
         except Exception as e:
+            self.logger.error(e)
+            return False
+
+    def test_archiyou_worker(self) -> bool:
+
+        try:
+            result = compute_job_archiyou.apply_async(args=[], kwargs={ 'script' : None })
+            result.get()
+            return True
+        except Exception as e:
+            self.logger.error(e)
             return False
 
     def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
@@ -83,6 +146,9 @@ class ModelRequestHandler():
         
         return task_method
 
+    def script_engine_has_workers(self, requested_script:CadScriptRequest) -> bool:
+
+        return requested_script.script_cad_language in self.available_scriptengine_workers
 
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
         """
@@ -121,6 +187,10 @@ class ModelRequestHandler():
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
+                    
+                    if self.script_engine_has_workers(requested_script) is False:
+                        raise HTTPException(500, detail=f'No workers available for cad script engine "{requested_script.script_cad_language}". Try again or report to the administrator!') # raise http exception to give server error
+
                     task:AsyncResult = self.get_celery_task_method(requested_script).apply_async(args=[], kwargs={ 'script' : requested_script.json() })
                     result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
 

@@ -10,12 +10,17 @@ from occilib.ApiGenerator import ApiGenerator
 from occilib.models import SearchQueryInput
 
 from dotenv import dotenv_values
-CONFIG = dotenv_values()  
+CONFIG = dotenv_values()
 
 library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
-
 api_generator = ApiGenerator(library)
+
+#### CHECK CONNECTION TO RMQ ####
+
+if api_generator.request_handler.check_celery() is False:
+    raise Exception('*** RESTART API - No Celery connection and/or missing workers: Restart API ****') 
+
 app = FastAPI(openapi_tags=api_generator.get_api_tags(scripts))
 api_generator.generate_endpoints(api=app, scripts=scripts)
 

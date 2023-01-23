@@ -5,7 +5,6 @@ import time
 import random
 
 from celery import Celery # docs: https://docs.celeryq.dev/en/stable/userguide/tasks.html#basics
-from dotenv import dotenv_values
 
 import cadquery
 from cadquery import cqgi
@@ -14,15 +13,19 @@ from pathlib import Path
 from .CadScript import CadScriptResult
 from .models import ModelResult
 
+from dotenv import dotenv_values
 CONFIG = dotenv_values()  
 
-celery = Celery(__name__)
+celery = Celery(__name__) # celery app
 celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL') or 'amqp://guest:pass@localhost:5672'
-celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 - TODO: move to redis?
+celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 
 celery.conf.task_routes = {
-            'cadquery.*': {'queue': 'cadquery'},
-            'archiyou.*': {'queue': 'archiyou'}
+            'cadquery.*': { 'queue': 'cadquery', 'routing_key' : 'cadquery' }, # default exchange but different key
+            'archiyou.*': { 'queue': 'archiyou', 'routing_key' : 'archiyou' }
         }
+celery.conf.task_default_exchange = 'cadquery'
+celery.conf.task_default_exchange_type = 'direct'
+celery.conf.task_default_routing_key = 'cadquery'
 
 # IMPORTANT: set working directory outside the project dir 
 # we presume that cqworker will run in a docker container
@@ -92,3 +95,9 @@ def compute_job_cadquery(self,script:str): # json of CadScript
     #### END EXECUTION
 
     return script_result.dict()
+
+
+@celery.task(name='archiyou.compute', bind=True)
+def compute_job_archiyou(self,script:str):
+    # dummy for sending to broker: real work is done by archiyou nodejs worker
+    return None
