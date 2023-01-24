@@ -10,13 +10,16 @@
 
 import logging
 from fastapi import HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
+from fastapi.responses import Response, RedirectResponse, JSONResponse, FileResponse
 
 from typing import Dict, Any
 
 import asyncio
 from asgiref.sync import sync_to_async
+
 import nest_asyncio # see:  https://github.com/erdewit/nest_asyncio
+nest_asyncio.apply() # enables us to plug into running loop of FastApi
+
 from contextlib import suppress
 
 from celery.result import AsyncResult
@@ -34,13 +37,11 @@ from kombu import Exchange, Queue, Connection
 from dotenv import dotenv_values
 CONFIG = dotenv_values()  
 
-nest_asyncio.apply() # enables us to plug into running loop of FastApi
-
 class ModelRequestHandler():
 
     #### SETTINGS ####
-    WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT = 3
-    REDIRECTING_COMPUTING_STATE = 'status'
+    WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 3
+    REDIRECTING_COMPUTING_STATE = 'job'
     CAD_SCRIPT_ENGINES = ['cadquery', 'archiyou']
 
     #### END SETTINGS
@@ -150,6 +151,24 @@ class ModelRequestHandler():
 
         return requested_script.script_cad_language in self.available_scriptengine_workers
 
+
+    def handle_script_result(self, script_result:CadScriptResult) -> Response|FileResponse:
+        # we got a compute result in time to respond directly to the API client
+        self.logger.info('ModelRequestHandler::handle_script_result')
+        self.logger.info(type(script_result))
+        self.logger.info(script_result)
+
+        if script_result:
+            if script_result.results.success is True:
+                return self.library.checkin_script_result_in_cache_and_return(script_result)
+            else:
+                errors_str = ','.join(script_result.results.errors)
+                raise HTTPException(status_code=404, 
+                    detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
+        else:
+            self.logger.error('ModelRequestHandler::handle_script_result: No script result given!')
+
+
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
         """
             Handle request coming from API
@@ -180,10 +199,10 @@ class ModelRequestHandler():
             # no cache - but already computing?
             self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
 
-            computing_task_id = self.library.check_script_model_is_computing(requested_script.name, requested_script.hash())
-            if computing_task_id:
+            computing_job = self.library.check_script_model_computing_job(requested_script.name, requested_script.hash())
+            if computing_job is not None:
                 # refer back to compute url
-                return self.go_to_computing_url(requested_script,computing_task_id, set_compute_status=False)
+                return self.go_to_computing_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
@@ -196,16 +215,11 @@ class ModelRequestHandler():
 
                     # wait time is over before compute could finish:
                     if result_or_timeout is None:
+                        # no result
                         return self.go_to_computing_url(requested_script, task.id)
                     else:
-                        # we got a compute result in time to respond directly to the API client
-                        script_result:CadScriptResult = result_or_timeout
-                        if script_result.results.success is True:
-                            return self.library.checkin_script_result_in_cache_and_return(script_result)
-                        else:
-                            errors_str = ','.join(script_result.results.errors)
-                            raise HTTPException(status_code=404, 
-                                detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
+                        # check and handle 
+                       self.handle_script_result(result_or_timeout)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
@@ -220,7 +234,7 @@ class ModelRequestHandler():
             inspired by: https://stackoverflow.com/questions/53967281/what-would-be-promise-race-equivalent-in-python-asynchronous-code
         """
 
-        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
+        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT
 
         def coro_is_wait(coro):
             return '.wait' in str(coro) # TODO: not really robust, make this better
@@ -229,13 +243,30 @@ class ModelRequestHandler():
         async def wait(t):
             await asyncio.sleep(t)
             self.logger.warn(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect: Wait for direct compute result elapsed: {t} seconds!')
-            return None
+            return False
+
+        async def compute_and_handle_result():
+            result = await self.result_to_async(task)()
+            return result
+        
+        '''
+            IMPORTANT: once a long compute (compute_and_handle_result) is slower than wait it does not continue any more (for some reason)
+            Start another async task to monitor the result and handle it
+        '''
+        async def monitor_for_celery_result(task_id) -> CadScriptResult:
+            celery_task_result = AsyncResult(task_id)
+            while not celery_task_result.ready():
+                await asyncio.sleep(1)
+            result_dict = celery_task_result.result
+            self.handle_script_result(CadScriptResult(**result_dict)) # convert to CadScriptResult
+            return True
 
         loop = asyncio.get_running_loop()
         racing_tasks = set()
         racing_tasks.add(loop.create_task(wait(wait_time)))
-        racing_tasks.add(loop.create_task(self.result_to_async(task)()))
+        racing_tasks.add(loop.create_task(compute_and_handle_result()))
 
+        # see asyncio.wait: https://docs.python.org/3/library/asyncio-task.html#asyncio.wait
         done_first, pending = loop.run_until_complete(asyncio.wait(racing_tasks, return_when=asyncio.FIRST_COMPLETED))
         
         """
@@ -247,6 +278,7 @@ class ModelRequestHandler():
             This might mean that the API does block the period of waiting for compute result
         """
         result = None
+
         for coro in done_first: # in theory there could be more routines, but probably either wait or compute result
             try:
                 # return the first
@@ -254,19 +286,24 @@ class ModelRequestHandler():
             except TimeoutError:
                 return None
         
-        # continue the other task (can be the compute routine or the wait)
-        for pending_coro in pending:
-            if coro_is_wait(pending_coro): # TODO: not really robust, make this better
-                # for the record: cancel the wait coroutine and block further errors
-                pending_coro.cancel()
-                with suppress(asyncio.CancelledError):
-                    loop.run_until_complete(pending_coro)
-            else:
-                # continue the compute routine
-                loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
         
-        if result is not None:
+        for pending_coro in pending:
+            # We have to cancel the all remaining coroutines to continue
+            # NOTE that the compute task is going through Celery anyways - only we can't follow it anymore
+            # We start a new async coroutine to monitor it
+
+            pending_coro.cancel()
+            with suppress(asyncio.CancelledError):
+                loop.run_until_complete(pending_coro)
+
+            # wait for celery compute task with seperate coroutine
+            if not coro_is_wait(pending_coro):
+                loop.create_task(monitor_for_celery_result(task.id))
+        
+        if result is not False:
             script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
+        else:
+            script_result = None
 
         return script_result
 
@@ -278,7 +315,7 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=True)() # includes results. thread_sensitive is needed!
+            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=False)() # includes results. thread_sensitive is needed!
             return compute_result
         return wrapper
 

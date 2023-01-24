@@ -15,7 +15,7 @@ import base64
 import json
 import itertools
 
-from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits
+from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
 
 
@@ -23,6 +23,7 @@ class ModelRequest(BaseModel):
     """
         Request to execute CadScript with given params and output form
     """
+    created_at:datetime = datetime.now()
     hash:str = None # name+param+values hash id
     params: Dict[str, ParamInstance] = {}
     format: ModelFormat = 'step' # requested output format of the model
@@ -37,6 +38,7 @@ class CadScript(BaseModel):
 
     """
     id:str = None # runtime instance id
+    status:EndpointStatus = 'success'
     name:str # always lowercase
     author:str = None
     org:str = None
