@@ -219,7 +219,7 @@ class ModelRequestHandler():
                         return self.go_to_computing_url(requested_script, task.id)
                     else:
                         # check and handle 
-                       self.handle_script_result(result_or_timeout)
+                       return self.handle_script_result(result_or_timeout)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
