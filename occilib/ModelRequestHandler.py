@@ -59,16 +59,15 @@ class ModelRequestHandler():
         if not isinstance(self.library, CadLibrary):
             self.logger.error('ModelRequestHandler::__init__(library): Please supply library!') 
 
-        self.setup_exchanges()
+        self.setup_celery_exchanges()
 
         if self.check_celery() is False:
             self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
         else:
             self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
         
-        self.celery.autodiscover_tasks() # discover tasks
 
-    def setup_exchanges(self):
+    def setup_celery_exchanges(self):
         '''
             Manually set up exchanges and bindings
             This is somewhat hacky. Archiyou exhange is not setup automatically (because worker is running nodejs)
@@ -154,9 +153,6 @@ class ModelRequestHandler():
 
     def handle_script_result(self, script_result:CadScriptResult) -> Response|FileResponse:
         # we got a compute result in time to respond directly to the API client
-        self.logger.info('ModelRequestHandler::handle_script_result')
-        self.logger.info(type(script_result))
-        self.logger.info(script_result)
 
         if script_result:
             if script_result.results.success is True:
@@ -202,7 +198,7 @@ class ModelRequestHandler():
             computing_job = self.library.check_script_model_computing_job(requested_script.name, requested_script.hash())
             if computing_job is not None:
                 # refer back to compute url
-                return self.go_to_computing_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
+                return self.got_to_computing_job_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
@@ -216,7 +212,7 @@ class ModelRequestHandler():
                     # wait time is over before compute could finish:
                     if result_or_timeout is None:
                         # no result
-                        return self.go_to_computing_url(requested_script, task.id)
+                        return self.got_to_computing_job_url(requested_script, task.id)
                     else:
                         # check and handle 
                        return self.handle_script_result(result_or_timeout)
@@ -270,15 +266,12 @@ class ModelRequestHandler():
         done_first, pending = loop.run_until_complete(asyncio.wait(racing_tasks, return_when=asyncio.FIRST_COMPLETED))
         
         """
-            !!!
-            TODO: DEBUG this message:
+            !!! TODO: DEBUG this message:
             RuntimeError: Cannot enter into task <Task pending name='Task-1' coro=<Server.serve() running at /usr/local/lib/python3.10/site-packages/uvicorn/server.py:80> wait_for=<Future finished result=None> cb=[_run_until_complete_cb() at /usr/local/lib/python3.10/asyncio/base_events.py:184, WorkerThread.stop()]> while another task <Task pending name='Task-4' coro=<RequestResponseCycle.run_asgi() running at /usr/local/lib/python3.10/site-packages/uvicorn/protocols/http/h11_impl.py:407> cb=[set.discard()]> is being executed.
-            It mostly happens the first request
-            The nested coroutine is blocking the main FastAPI loop? 
-            This might mean that the API does block the period of waiting for compute result
+            It mostly happens the first request without any noticable consequences
         """
-        result = None
 
+        result = None
         for coro in done_first: # in theory there could be more routines, but probably either wait or compute result
             try:
                 # return the first
@@ -319,7 +312,7 @@ class ModelRequestHandler():
             return compute_result
         return wrapper
 
-    def go_to_computing_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
+    def got_to_computing_job_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
         """
             When compute result takes longer then WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
             Redirect to compute status url which the user can query untill the compute task is done 
@@ -328,7 +321,7 @@ class ModelRequestHandler():
         if set_compute_status:
             self.library.set_script_model_is_computing(script, task_id)
 
-        return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}')
+        return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
 
 
     def _req_to_script_request(self,req:ModelRequestInput) -> CadScriptRequest:

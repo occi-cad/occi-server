@@ -31,6 +31,21 @@ class ModelRequest(BaseModel):
     quality: ModelQuality = 'high' # TODO
     meta: dict = {} # TODO
 
+    def get_param_query_string(self) -> str:
+        '''
+            Generate the GET parameters string 
+            example: ?format=step&output=full&width=100
+        '''
+        query_param_values = []
+        for param_name, param_instance in self.params.items():
+            query_param_values.append = f'{param_name}={param_instance.value}'
+
+        query_param_values_string = '&' + '&'.join(query_param_values) if len(query_param_values) > 0 else ''
+
+        return f'?format={self.format}&output={self.output or "model"}{query_param_values_string}'
+
+
+
 class CadScript(BaseModel):
     """ 
     A script containing a CAD component with information on inputs and code cad language
@@ -172,6 +187,15 @@ class CadScriptRequest(CadScript):
 
             return param_values
 
+
+class ModelComputeJob(BaseModel):
+    status:EndpointStatus = 'working'
+    celery_task_id:str = None
+    celery_task_status:str = None
+    script:CadScriptRequest = None
+    elapsed_time:int = None # in seconds
+
+
 class CadScriptResult(CadScriptRequest):
     """
         CadScript that has been through compute and has results
@@ -180,5 +204,5 @@ class CadScriptResult(CadScriptRequest):
     
 
 
-    
+
 

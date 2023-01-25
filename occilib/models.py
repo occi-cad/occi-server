@@ -70,12 +70,6 @@ class ModelRequestInput(BaseModel):
     # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
 
-class ModelComputeJob(BaseModel):
-    status:EndpointStatus = 'working'
-    celery_task_id:str = None
-    celery_task_status:str = None
-    elapsed_time:int = None # in seconds
-
 class ModelResult(BaseModel):
     id:str = None # name + param hash = instance hash
     success:bool = False

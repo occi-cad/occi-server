@@ -5,6 +5,7 @@ import time
 import random
 
 from celery import Celery # docs: https://docs.celeryq.dev/en/stable/userguide/tasks.html#basics
+from celery.signals import after_task_publish
 
 import cadquery
 from cadquery import cqgi
@@ -31,6 +32,9 @@ celery.conf.task_default_routing_key = 'cadquery'
 # we presume that cqworker will run in a docker container
 Path("/cqworkertmp").mkdir(parents=True, exist_ok=True)
 os.chdir('/cqworkertmp')
+
+
+#### CADQUERY COMPUTE TASK ####
 
 @celery.task(name='cadquery.compute', bind=True) # bind needed for retries
 def compute_job_cadquery(self,script:str): # json of CadScript 
@@ -96,8 +100,22 @@ def compute_job_cadquery(self,script:str): # json of CadScript
 
     return script_result.dict()
 
-
+#### DUMMY ARCHIYOU COMPUTE TASK ####
 @celery.task(name='archiyou.compute', bind=True)
 def compute_job_archiyou(self,script:str):
     # dummy for sending to broker: real work is done by archiyou nodejs worker
     return None
+
+
+#### EXTRA SIGNAL WHEN PUBLISHED ####
+'''
+    To identify (un)known task_ids
+    see: https://stackoverflow.com/questions/9824172/find-out-whether-celery-task-exists
+'''
+
+@after_task_publish.connect
+def update_sent_state(sender=None, headers=None, **kwargs):
+    task = celery.tasks.get(sender)
+    backend = task.backend if task else celery.backend
+    backend.store_result(headers['id'], None, "SENT")
+

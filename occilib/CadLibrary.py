@@ -29,9 +29,8 @@ from typing import List, Dict, Any
 
 from fastapi.responses import Response, FileResponse
 
-from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult
+from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
-from .models import ModelComputeJob
 from .Param import ParamConfigNumber, ParamConfigText
 
 class CadLibrary:
@@ -91,6 +90,7 @@ class CadLibrary:
             self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
         
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
+        script_request.request.created_at = datetime.now() # we need to refresh created_at (the original request ismade when the script is loaded)
         return script_request
         
     def _setup_logger(self):
@@ -415,7 +415,8 @@ class CadLibrary:
         """
             Set computing status in library cache for this script and parameter hash
             This is needed to avoid computing things twice when requests are shortly after each other
-            The task_id is placed as filename in the cache directory 
+            The task_id is placed as filename in the cache directory
+            use 'check_script_model_computing_job' to check
         """
 
         if not isinstance(script.request, ModelRequest):
@@ -448,22 +449,32 @@ class CadLibrary:
                 if ext == self.COMPUTE_FILE_EXT: # .compute extension for robustness
                     self.logger.info(f'ModelRequestHandler::check_script_model_computing_job: Found computing file = "{files[0]}"')
                     task_id = files[0].replace(self.COMPUTE_FILE_EXT, '') # name of file is the task_id
-                    task_elapsed_time = None
+
+                    job = ModelComputeJob(celery_task_id=task_id)
 
                     try:
                         with open(f'{script_request_dir}/{first_file}', 'r') as f:
                             requested_script_dict = json.loads(f.read())
-                            task_start_time_utc = requested_script_dict['request']['created_at']
-                            task_elapsed_time = (datetime.now() - datetime.strptime(task_start_time_utc,'%Y-%m-%dT%H:%M:%S.%f')).total_seconds()
+                            requested_script = CadScriptRequest(**requested_script_dict)
+                            job.script = requested_script
+                            job.elapsed_time = round((datetime.now() - requested_script.request.created_at).total_seconds() * 1000)
                     except Exception as e:
                         # avoid all kinds of errors for nothing essential
                         self.logger.error(f'CadLibrary::check_script_model_computing_job: ERROR: "{e}"')
 
-                    return ModelComputeJob(celery_task_id=task_id, elapsed_time=task_elapsed_time)
+                    return job
                 else:
                     return None # probably cached files
             
         return None
+        
+    def remove_script_model_is_computing_job(self, script:CadScriptResult|CadScriptRequest) -> bool:
+
+        script_request_dir = f'{self._get_script_cache_dir(script.name)}/{script.hash()}'
+        
+        if os.path.exists(script_request_dir):
+            self.remove_compute_files(dir=script_request_dir)
+
 
     def _get_script_cached_model_dir(self, script:CadScriptRequest) -> str:
             
@@ -558,11 +569,6 @@ class CadLibrary:
                 else:
                     return { 'status' : 'error', 'message' : f'No valid output model in {format}. Please contact the administrator!' }
 
-    def remove_compute_files(self, dir):
-        files = os.listdir(dir)
-        for f in files:
-            if f.endswith(self.COMPUTE_FILE_EXT):
-                os.remove(os.path.join(dir, f))
         
 
     #### CACHE PRE CALCULATION AND ADMIN ####
@@ -632,6 +638,12 @@ class CadLibrary:
         return self.searcher.search(q)
 
     #### UTILS ####
+
+    def remove_compute_files(self, dir):
+        files = os.listdir(dir)
+        for f in files:
+            if f.endswith(self.COMPUTE_FILE_EXT):
+                os.remove(os.path.join(dir, f))
 
     def _print_library_overview(self):
 
