@@ -29,7 +29,7 @@ from typing import List, Dict, Any
 
 from fastapi.responses import Response, FileResponse
 
-from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult
+from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
 from .Param import ParamConfigNumber, ParamConfigText
 
@@ -90,6 +90,7 @@ class CadLibrary:
             self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
         
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
+        script_request.request.created_at = datetime.now() # we need to refresh created_at (the original request ismade when the script is loaded)
         return script_request
         
     def _setup_logger(self):
@@ -414,7 +415,8 @@ class CadLibrary:
         """
             Set computing status in library cache for this script and parameter hash
             This is needed to avoid computing things twice when requests are shortly after each other
-            The task_id is placed as filename in the cache directory 
+            The task_id is placed as filename in the cache directory
+            use 'check_script_model_computing_job' to check
         """
 
         if not isinstance(script.request, ModelRequest):
@@ -427,14 +429,14 @@ class CadLibrary:
         self._clear_dir(script_request_dir_path)
 
         with open(f'{script_request_dir_path}/{task_id}{self.COMPUTE_FILE_EXT}', 'w') as fp: # {library_path}/{component}/{component}-cache/{param hash}/{task_id}
-            fp.write(script.json()) # write requested script in file for convenience
+            fp.write(script.json()) # write requested script in file for convenience. It is also used to track calculation time
 
         return True
 
-    def check_script_model_is_computing(self, script_name:str, script_instance_hash:str) -> str|bool:
+    def check_script_model_computing_job(self, script_name:str, script_instance_hash:str) -> ModelComputeJob:
         """
             Check if a specific script model request is computing
-            Return task_id or False
+            Return ModelComputeJob with among others task_id or None
         """
         script_request_dir = f'{self._get_script_cache_dir(script_name)}/{script_instance_hash}'
 
@@ -445,14 +447,34 @@ class CadLibrary:
                 first_file = files[0]
                 path, ext = os.path.splitext(first_file)
                 if ext == self.COMPUTE_FILE_EXT: # .compute extension for robustness
-                    self.logger.info(f'ModelRequestHandler::check_script_model_is_computing: Found computing. task_id = "{files[0]}"')
-                    return files[0].replace(self.COMPUTE_FILE_EXT, '') # return name of file, which is the task_id
-                else:
-                    return False # probably cached files
-            else:
-                False
+                    self.logger.info(f'ModelRequestHandler::check_script_model_computing_job: Found computing file = "{files[0]}"')
+                    task_id = files[0].replace(self.COMPUTE_FILE_EXT, '') # name of file is the task_id
 
-        return False
+                    job = ModelComputeJob(celery_task_id=task_id)
+
+                    try:
+                        with open(f'{script_request_dir}/{first_file}', 'r') as f:
+                            requested_script_dict = json.loads(f.read())
+                            requested_script = CadScriptRequest(**requested_script_dict)
+                            job.script = requested_script
+                            job.elapsed_time = round((datetime.now() - requested_script.request.created_at).total_seconds() * 1000)
+                    except Exception as e:
+                        # avoid all kinds of errors for nothing essential
+                        self.logger.error(f'CadLibrary::check_script_model_computing_job: ERROR: "{e}"')
+
+                    return job
+                else:
+                    return None # probably cached files
+            
+        return None
+        
+    def remove_script_model_is_computing_job(self, script:CadScriptResult|CadScriptRequest) -> bool:
+
+        script_request_dir = f'{self._get_script_cache_dir(script.name)}/{script.hash()}'
+        
+        if os.path.exists(script_request_dir):
+            self.remove_compute_files(dir=script_request_dir)
+
 
     def _get_script_cached_model_dir(self, script:CadScriptRequest) -> str:
             
@@ -487,13 +509,14 @@ class CadLibrary:
         return True
 
     def checkin_script_result_in_cache_and_return(self, script_result:CadScriptResult) -> Response|FileResponse: # return a raw Starlette/FastAPI response with json content
-        
+
         script_result_json = script_result.json()
 
         # cache if cachable
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
 
-        if script_result.is_cachable():    
+        if script_result.is_cachable():
+            self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model result can be cached. Cache directory: {result_cache_dir}')
             # place total JSON response in cache
             Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
 
@@ -512,8 +535,12 @@ class CadLibrary:
                     with open(f'{result_cache_dir}/result.gltf', 'wb') as f:
                         gltf_binary = base64.b64decode(script_result.results.models['gltf']) # decode base64
                         f.write(gltf_binary)
+                self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Cache put complete')
             else:
                 self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
+
+        # clean compute files in script dir
+        self.remove_compute_files(dir=result_cache_dir)
 
         # only allow requested format to be outputted
         script_result = self._apply_single_model_format(script_result)
@@ -541,6 +568,8 @@ class CadLibrary:
                         return FileResponse(f.name, filename=output_model_filename)
                 else:
                     return { 'status' : 'error', 'message' : f'No valid output model in {format}. Please contact the administrator!' }
+
+        
 
     #### CACHE PRE CALCULATION AND ADMIN ####
 
@@ -609,6 +638,12 @@ class CadLibrary:
         return self.searcher.search(q)
 
     #### UTILS ####
+
+    def remove_compute_files(self, dir):
+        files = os.listdir(dir)
+        for f in files:
+            if f.endswith(self.COMPUTE_FILE_EXT):
+                os.remove(os.path.join(dir, f))
 
     def _print_library_overview(self):
 

@@ -8,19 +8,20 @@
 
 """
 
-import time
 import logging
 from fastapi import HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
+from fastapi.responses import Response, RedirectResponse, JSONResponse, FileResponse
 
 from typing import Dict, Any
 
 import asyncio
 from asgiref.sync import sync_to_async
+
 import nest_asyncio # see:  https://github.com/erdewit/nest_asyncio
+nest_asyncio.apply() # enables us to plug into running loop of FastApi
+
 from contextlib import suppress
 
-import celery
 from celery.result import AsyncResult
 
 from .models import ModelRequestInput
@@ -28,21 +29,27 @@ from .Param import ParamConfigBase, ParamInstance
 from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
-from .cqworker import compute_job_cadquery
-#from .aycomputetask import compute_job_archiyou
+from .celery_tasks import celery as celery_app
+from .celery_tasks import compute_job_cadquery,compute_job_archiyou
 
-nest_asyncio.apply() # enables us to plug into running loop of FastApi
+from kombu import Exchange, Queue, Connection
+
+from dotenv import dotenv_values
+CONFIG = dotenv_values()  
 
 class ModelRequestHandler():
 
     #### SETTINGS ####
-    WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT = 3
-    REDIRECTING_COMPUTING_STATE = 'status'
+    WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 3
+    REDIRECTING_COMPUTING_STATE = 'job'
+    CAD_SCRIPT_ENGINES = ['cadquery', 'archiyou']
 
     #### END SETTINGS
 
     library:CadLibrary
+    celery = celery_app # from import celery_tasks
     celery_connected:bool = False
+    available_scriptengine_workers = [] # cadquery, archiyou = queue names
 
     def __init__(self, library:CadLibrary):
             
@@ -52,34 +59,83 @@ class ModelRequestHandler():
         if not isinstance(self.library, CadLibrary):
             self.logger.error('ModelRequestHandler::__init__(library): Please supply library!') 
 
+        self.setup_celery_exchanges()
+
         if self.check_celery() is False:
             self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
         else:
             self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
-            # self._set_celery_routing() # DEBUG FIRST!
         
 
+    def setup_celery_exchanges(self):
+        '''
+            Manually set up exchanges and bindings
+            This is somewhat hacky. Archiyou exhange is not setup automatically (because worker is running nodejs)
+        '''
+        conn = self.celery._acquire_connection()                                                                                                                                                                       
+        exchange = Exchange("archiyou", type="direct", channel=conn.channel())                                                                                                                                                                                      
+        queue = Queue(name="archiyou", exchange=exchange, routing_key="archiyou")                                                                                                                                                                   
+        queue.maybe_bind(conn)                                                                                                                                                                                                                      
+        queue.declare() 
+
+
     def check_celery(self) -> bool:
+        '''
+            Check if Celery can connect to its backend(s) and if there are workers for both cad script engines
+        '''
 
         try:
-            celery.current_app.control.inspect().ping()
+            self.logger.info('**** CHECKING CELERY CONNECTIONS ****')
+            
+            self.celery.control.inspect(timeout=1.0).ping()
             self.celery_connected = True
+            self.logger.info('ModelRequestHandler::check_celery: Connected to RMQ backend!')
+            
+            # check connected workers and their queues (see: https://docs.celeryq.dev/en/stable/_modules/celery/app/control.html#Inspect)
+            if self.celery.control.inspect().active_queues() is None:
+                self.logger.error('ModelRequestHandler::check_celery: No workers connected to compute queues')
+                return False
+
+            # NOTE: inspecting active queues do not work with archiyou node-celery worker
+            if self.test_archiyou_worker() is True:
+                if 'archiyou' not in self.available_scriptengine_workers:
+                    self.available_scriptengine_workers.append('archiyou') 
+            
+            for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
+                queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
+                if queue_name:
+                    self.logger.info(f'* Worker "{worker_host}" connected to queue: "{queue_name}"')
+                    if queue_name not in self.available_scriptengine_workers:
+                        self.available_scriptengine_workers.append(queue_name)
+
+            script_engine_list = '\n - '.join(self.available_scriptengine_workers)
+            self.logger.info(f'*** Connected workers for script engine: \n - {script_engine_list}')
+            for engine in self.CAD_SCRIPT_ENGINES:
+                if engine not in self.available_scriptengine_workers:
+                    self.logger.error(f'ModelRequestHandler::check_celery: Cad engine "{engine}" has no workers available!')
+                    return False
+
             return self.celery_connected
+
         except Exception as e:
+            self.logger.error(e)
             return False
 
-    def _set_celery_routing(self):
+    def test_archiyou_worker(self) -> bool:
 
-        celery.current_app.task_routes = ([
-            {'cadquery.*': {'queue': 'cadquery'}},
-            #{'archiyou.*': {'queue': 'archiyou'}}
-        ])
+        try:
+            result = compute_job_archiyou.apply_async(args=[], kwargs={ 'script' : None })
+            result.get()
+            return True
+        except Exception as e:
+            self.logger.error(e)
+            return False
 
     def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
 
         TASK_METHODS_BY_ENGINE = {
             'cadquery' : compute_job_cadquery, 
-            #'archiyou' : compute_job_archiyou,
+            'archiyou' : compute_job_archiyou,
         }
         DEFAULT_ENGINE = 'cadquery'
 
@@ -89,6 +145,24 @@ class ModelRequestHandler():
             task_method = TASK_METHODS_BY_ENGINE[DEFAULT_ENGINE]
         
         return task_method
+
+    def script_engine_has_workers(self, requested_script:CadScriptRequest) -> bool:
+
+        return requested_script.script_cad_language in self.available_scriptengine_workers
+
+
+    def handle_script_result(self, script_result:CadScriptResult) -> Response|FileResponse:
+        # we got a compute result in time to respond directly to the API client
+
+        if script_result:
+            if script_result.results.success is True:
+                return self.library.checkin_script_result_in_cache_and_return(script_result)
+            else:
+                errors_str = ','.join(script_result.results.errors)
+                raise HTTPException(status_code=404, 
+                    detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
+        else:
+            self.logger.error('ModelRequestHandler::handle_script_result: No script result given!')
 
 
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
@@ -121,28 +195,27 @@ class ModelRequestHandler():
             # no cache - but already computing?
             self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
 
-            computing_task_id = self.library.check_script_model_is_computing(requested_script.name, requested_script.hash())
-            if computing_task_id:
+            computing_job = self.library.check_script_model_computing_job(requested_script.name, requested_script.hash())
+            if computing_job is not None:
                 # refer back to compute url
-                return self.go_to_computing_url(requested_script,computing_task_id, set_compute_status=False)
+                return self.got_to_computing_job_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
+                    
+                    if self.script_engine_has_workers(requested_script) is False:
+                        raise HTTPException(500, detail=f'No workers available for cad script engine "{requested_script.script_cad_language}". Try again or report to the administrator!') # raise http exception to give server error
+
                     task:AsyncResult = self.get_celery_task_method(requested_script).apply_async(args=[], kwargs={ 'script' : requested_script.json() })
                     result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
 
                     # wait time is over before compute could finish:
                     if result_or_timeout is None:
-                        return self.go_to_computing_url(requested_script, task.id)
+                        # no result
+                        return self.got_to_computing_job_url(requested_script, task.id)
                     else:
-                        # we got a compute result in time to respond directly to the API client
-                        script_result:CadScriptResult = result_or_timeout
-                        if script_result.results.success is True:
-                            return self.library.checkin_script_result_in_cache_and_return(script_result)
-                        else:
-                            errors_str = ','.join(script_result.results.errors)
-                            raise HTTPException(status_code=404, 
-                                detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
+                        # check and handle 
+                       return self.handle_script_result(result_or_timeout)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
@@ -157,7 +230,7 @@ class ModelRequestHandler():
             inspired by: https://stackoverflow.com/questions/53967281/what-would-be-promise-race-equivalent-in-python-asynchronous-code
         """
 
-        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
+        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT
 
         def coro_is_wait(coro):
             return '.wait' in str(coro) # TODO: not really robust, make this better
@@ -166,23 +239,38 @@ class ModelRequestHandler():
         async def wait(t):
             await asyncio.sleep(t)
             self.logger.warn(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect: Wait for direct compute result elapsed: {t} seconds!')
-            return None
+            return False
+
+        async def compute_and_handle_result():
+            result = await self.result_to_async(task)()
+            return result
+        
+        '''
+            IMPORTANT: once a long compute (compute_and_handle_result) is slower than wait it does not continue any more (for some reason)
+            Start another async task to monitor the result and handle it
+        '''
+        async def monitor_for_celery_result(task_id) -> CadScriptResult:
+            celery_task_result = AsyncResult(task_id)
+            while not celery_task_result.ready():
+                await asyncio.sleep(1)
+            result_dict = celery_task_result.result
+            self.handle_script_result(CadScriptResult(**result_dict)) # convert to CadScriptResult
+            return True
 
         loop = asyncio.get_running_loop()
         racing_tasks = set()
         racing_tasks.add(loop.create_task(wait(wait_time)))
-        racing_tasks.add(loop.create_task(self.result_to_async(task)()))
+        racing_tasks.add(loop.create_task(compute_and_handle_result()))
 
+        # see asyncio.wait: https://docs.python.org/3/library/asyncio-task.html#asyncio.wait
         done_first, pending = loop.run_until_complete(asyncio.wait(racing_tasks, return_when=asyncio.FIRST_COMPLETED))
         
         """
-            !!!
-            TODO: DEBUG this message:
+            !!! TODO: DEBUG this message:
             RuntimeError: Cannot enter into task <Task pending name='Task-1' coro=<Server.serve() running at /usr/local/lib/python3.10/site-packages/uvicorn/server.py:80> wait_for=<Future finished result=None> cb=[_run_until_complete_cb() at /usr/local/lib/python3.10/asyncio/base_events.py:184, WorkerThread.stop()]> while another task <Task pending name='Task-4' coro=<RequestResponseCycle.run_asgi() running at /usr/local/lib/python3.10/site-packages/uvicorn/protocols/http/h11_impl.py:407> cb=[set.discard()]> is being executed.
-            It mostly happens the first request
-            The nested coroutine is blocking the main FastAPI loop? 
-            This might mean that the API does block the period of waiting for compute result
+            It mostly happens the first request without any noticable consequences
         """
+
         result = None
         for coro in done_first: # in theory there could be more routines, but probably either wait or compute result
             try:
@@ -191,19 +279,24 @@ class ModelRequestHandler():
             except TimeoutError:
                 return None
         
-        # continue the other task (can be the compute routine or the wait)
-        for pending_coro in pending:
-            if coro_is_wait(pending_coro): # TODO: not really robust, make this better
-                # for the record: cancel the wait coroutine and block further errors
-                pending_coro.cancel()
-                with suppress(asyncio.CancelledError):
-                    loop.run_until_complete(pending_coro)
-            else:
-                # continue the compute routine
-                loop.run_until_complete(pending_coro) # this is needed to continue running the task for some reason
         
-        if result is not None:
+        for pending_coro in pending:
+            # We have to cancel the all remaining coroutines to continue
+            # NOTE that the compute task is going through Celery anyways - only we can't follow it anymore
+            # We start a new async coroutine to monitor it
+
+            pending_coro.cancel()
+            with suppress(asyncio.CancelledError):
+                loop.run_until_complete(pending_coro)
+
+            # wait for celery compute task with seperate coroutine
+            if not coro_is_wait(pending_coro):
+                loop.create_task(monitor_for_celery_result(task.id))
+        
+        if result is not False:
             script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
+        else:
+            script_result = None
 
         return script_result
 
@@ -215,11 +308,11 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=True)() # includes results. thread_sensitive is needed!
+            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=False)() # includes results. thread_sensitive is needed!
             return compute_result
         return wrapper
 
-    def go_to_computing_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
+    def got_to_computing_job_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
         """
             When compute result takes longer then WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
             Redirect to compute status url which the user can query untill the compute task is done 
@@ -228,7 +321,7 @@ class ModelRequestHandler():
         if set_compute_status:
             self.library.set_script_model_is_computing(script, task_id)
 
-        return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}')
+        return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
 
 
     def _req_to_script_request(self,req:ModelRequestInput) -> CadScriptRequest:

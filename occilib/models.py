@@ -21,6 +21,11 @@ class ParamType(str,Enum):
     text = 'text'
     # TODO: more param types
 
+class EndpointStatus(str,Enum):
+    success = 'success'
+    working = 'working'
+    error = 'error'
+
 class ModelUnits(str, Enum):
     mm = 'mm'
     cm = 'cm'
@@ -49,6 +54,7 @@ class ModelQuality(str,Enum): # TODO: not yet used
 class RequestResultFormat(str,Enum):
     full ='full'
     model = 'model'
+    
 
 #### IO MODELS ####
 
@@ -63,7 +69,6 @@ class ModelRequestInput(BaseModel):
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
     # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
-
 
 class ModelResult(BaseModel):
     id:str = None # name + param hash = instance hash
