@@ -31,6 +31,7 @@ services:
       - rmq
       - redis 
       - cqworker
+      - ayworker
 
   rmq:
       restart: always
@@ -51,7 +52,7 @@ services:
 
   cqworker:
     restart: always
-    container_name: cq-worker
+    container_name: occi-cq-worker
     build: .
     command: celery -A occilib.cqworker.celery worker --loglevel=info # -Q cadquery 
     volumes: # remove this to load scripts into the image on build
@@ -60,7 +61,17 @@ services:
       - rmq
       - redis 
 
-  # TODO: ayworker in node
+  ayworker:
+    restart: always
+    container_name: occi-ay-worker
+    image: node:16-alpine
+    volumes:
+      - .:/compute-worker # main directory so we can find the .env
+    working_dir: /compute-worker
+    command: node --experimental-specifier-resolution=node ./archiyou-compute-worker/build/index.js
+    depends_on:
+      - rmq
+      - redis
 
 
 volumes:
