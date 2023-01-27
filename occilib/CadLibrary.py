@@ -69,13 +69,11 @@ class CadLibrary:
             if self._check_path(rel_path) is None:
                 self.logger.error(f'CadLibrary::__init__(): Given path "{rel_path}" is not a valid directory')
             else:
-                self._load_scripts_dir(self.path)
-                
-        # clear all compute files in cache to avoid old stuff blocking new tasks
-        self._clear_computing_files()
-
-        # initiate search index
-        self.searcher = CadLibrarySearch(library=self)
+                self._load_scripts_dir(self.path)        
+        
+        self.order_scripts()
+        self._clear_computing_files() # clear all compute files in cache to avoid old stuff blocking new tasks
+        self.searcher = CadLibrarySearch(library=self) # initiate search index
 
         self._print_library_overview()
 
@@ -104,7 +102,7 @@ class CadLibrary:
         '''
         
         # check if user might use a float
-        if type(version) is not str:
+        if version is not None and type(version) is not str:
             version = str(version)
 
         script = None
@@ -163,8 +161,6 @@ class CadLibrary:
                 library_script = self._script_path_to_script(script_path_from_lib)
                 if library_script:
                     self.scripts.append(library_script)
-
-        self.order_scripts()
         
         self.source = 'disk'
         return self.scripts
