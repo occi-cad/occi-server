@@ -28,6 +28,7 @@ import tempfile
 from typing import List, Dict, Any
 
 from fastapi.responses import Response, FileResponse
+from semver.version import Version
 
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
@@ -36,12 +37,7 @@ from .Param import ParamConfigNumber, ParamConfigText
 class CadLibrary:
 
     DEFAULT_PATH = './scriptlibrary' # relative to script
-    FILE_STRUCTURE_TEMPLATES = [
-        r'{org}/{author}/{component}/{script}',
-        r'{author}/{component}/{script}',
-        r'{component}/{script}', # maybe change this to {author}/{script}?
-        r'{script}',
-    ]
+    FILE_STRUCTURE_TEMPLATE = '{org}/{name}/{version}/{script}' # IMPORTANT: linux directory seperator '/' (not '\')
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
     CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
     COMPUTE_FILE_EXT = '.compute'
@@ -49,9 +45,13 @@ class CadLibrary:
     request_handler = None # set when precomputing cache
     searcher:CadLibrarySearch = None 
     source = 'disk' # source of the scripts: disk or file (debug)
-    path = DEFAULT_PATH # absolute path to directory of CadScripts
-    scripts:List[CadScript] = []
-    scripts_by_name:Dict[str,CadScriptRequest] = {}
+    rel_path = DEFAULT_PATH # relative path to directory of CadScripts
+    path = None # absolute path to directory of CadScripts
+    scripts:List[CadScript] = [] # all scripts
+
+    latest_scripts:Dict[str,CadScript] = {} # only the latest scripts by unique name
+    script_versions:Dict[str,List[CadScript]] = {}
+    
     dirs_by_script_name:Dict[str,str] = {}
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
@@ -60,6 +60,7 @@ class CadLibrary:
             Paths are relative to root of the api directory
         """
         self._setup_logger()
+        self.path = Path(rel_path).resolve()
 
         if '.json' in rel_path:
             self._load_scripts_json(rel_path)
@@ -69,11 +70,7 @@ class CadLibrary:
                 self.logger.error(f'CadLibrary::__init__(): Given path "{rel_path}" is not a valid directory')
             else:
                 self._load_scripts_dir(self.path)
-
-        # for easy and fast access to certain scripts from the API 
-        for script in self.scripts:
-            self.scripts_by_name[script.name] = script
-
+                
         # clear all compute files in cache to avoid old stuff blocking new tasks
         self._clear_computing_files()
 
@@ -82,45 +79,50 @@ class CadLibrary:
 
         self._print_library_overview()
 
-    def get_script_request(self, name:str) -> CadScriptRequest:
         
-        script = self.scripts_by_name.get(name)
+
+    def order_scripts(self):
+        '''
+            We have all scripts in self.scripts. Order them for easy access.
+        '''
+        
+        for script in self.scripts:
+            scripts_by_name = list(filter(lambda s: s.name == script.name, self.scripts))
+            if len(scripts_by_name) == 1:
+                self.latest_scripts[script.name] = script
+                self.script_versions[script.name] = [script.version]
+            else:
+                if not self.latest_scripts.get(script.name):
+                    scripts_by_name_sorted = sorted(scripts_by_name, key=lambda s: s.version)
+                    self.latest_scripts[script.name] = scripts_by_name_sorted[-1] # pick last one ordered by semver
+                    self.script_versions[script.name] = [s.version for s in scripts_by_name_sorted]
+
+
+    def get_script_request(self, name:str, version:str=None) -> CadScriptRequest:
+        '''
+            Get script with given name 
+        '''
+        
+        # check if user might use a float
+        if type(version) is not str:
+            version = str(version)
+
+        script = None
+        if version is None:
+            script = self.latest_scripts.get(name) 
+        else:
+            l = list(filter(lambda s: (s.name == name and s.version == version), self.scripts))
+            if l:
+                script = l[0]
 
         if not script:
-            self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" in library!')
+            self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" and version "{version}" [optional] in library!')
+            return None
         
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
         script_request.request.created_at = datetime.now() # we need to refresh created_at (the original request ismade when the script is loaded)
+
         return script_request
-        
-    def _setup_logger(self):
-
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(level=logging.INFO)
-
-        try:
-            handler = logging.StreamHandler()
-            handler.setLevel(logging.INFO)
-            formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)-4s %(message)s')
-            handler.setFormatter(formatter)
-
-            if (self.logger.hasHandlers()):  # see: http://tiny.cc/v5w6gz
-                self.logger.handlers.clear()
-
-            self.logger.addHandler(handler)
-
-        except Exception as e:
-            self.logger.error(e)
-
-    def _check_path(self, rel_path:str) -> str:
-        # rel_path is related to the root of this project (occilib/..)
-        path = os.path.realpath(
-            os.path.join(
-                os.path.dirname(
-                    os.path.dirname(__file__)), rel_path))
-
-        self.path = path if os.path.isdir(path) else None
-        return self.path
 
     def _load_scripts_json(self, rel_path:str) -> List[CadScriptRequest]:
         # rel_path is related to the root of this project (occilib/..)
@@ -151,70 +153,90 @@ class CadLibrary:
         return self.scripts
 
         
-    def _load_scripts_dir(self, path:str) -> List[CadScript]:
-        glob_patterns = list(map(lambda t: self._template_to_glob_pattern(t), self.FILE_STRUCTURE_TEMPLATES ))
-        for g in glob_patterns:
-            for ext in self.CADSCRIPT_FILE_GLOB:
-                glob_path_and_file = g.format(script=ext)
-                for found_file in iglob(glob_path_and_file, root_dir=self.path, recursive=True):
-                    found_file_path = found_file.replace('\\', r'/') # file name with relative path from library root
-                    script = self._script_path_to_script(found_file_path) 
-                    if script:
-                        self.scripts.append(script)
+    def _load_scripts_dir(self, path:str = None) -> List[CadScript]:
+
+        library_path = Path(path or self.path)
+
+        for script_glob in self._template_to_script_globs(self.FILE_STRUCTURE_TEMPLATE):
+            for script_path in library_path.glob(script_glob):
+                script_path_from_lib = str(script_path.relative_to(self.path))
+                library_script = self._script_path_to_script(script_path_from_lib)
+                if library_script:
+                    self.scripts.append(library_script)
+
+        self.order_scripts()
         
         self.source = 'disk'
         return self.scripts
 
+    def _template_to_script_globs(self, template) -> List[str]:
+        '''
+            Convert script location template to glob
+            for example: '{namespace}/{name}/{version}/{script}' ==> [ '**/**/**/*.py', '**/**/**/*.js' ] 
+            see: self.FILE_STRUCTURE_TEMPLATE and self.CADSCRIPT_FILE_GLOB
+        '''
 
-    def _template_to_glob_pattern(self, template:str) -> str:
-        dirs = dict([ (d,'*') for d in ['org','author','component']])
-        return template.format(script=r'{script}', **dirs) # keep script the same for easy plugin of file extensions
+        base_glob = re.sub('\{[^\}]+\}\/', '**/', template)
+        script_globs = []
+        for script_glob in self.CADSCRIPT_FILE_GLOB:
+            script_globs.append(base_glob.format(script=script_glob))
+        
+        return script_globs
 
-    def _template_to_regex(self,template:str):
-        template = template.replace('/','\/')
-        re_dirs = re.sub(r'{[^\}]+\}\\', r'([^\/]+)', template) # TODO: use named groups!
-        regex = re_dirs.replace('{script}','([^\/$]+)$')
-        return regex
+
+    def _template_to_regex(self,template:str) -> str:
+        '''
+            Convert a template string to a regex with named groups
+             for example: '{namespace}/{name}/{version}/{script}' 
+             ==> '(?P<namespace>[^/]+)/(?P<name>[^/]+)/(?P<version>[^/])/(?P<script>[^$]+)
+        '''
+        term_regexs = []
+        
+        for term in template.split('/'): # only linux
+            term_name = term.replace('{', '').replace('}', '')
+            term_regex = f'(?P<{term_name}>[^\{os.sep}]+)' if term_name != 'script' else '(?P<script>[^$]+)'
+            term_regexs.append(term_regex)
+            
+        return f'\{os.sep}'.join(term_regexs)
+        
 
 
     def _script_path_to_script(self,script_path:str) -> CadScript: 
 
-        """ Create Script instance based on script_path 
+        """ Create Script instance based on script_path: {org/author}/{name}/{version}/{filename}
             NOTE: script_path (including filename) is relative to the library path
             TODO: rewrite this from template pattern and grouped regex for easy config!
         """
 
-        file_parse_regexs = list(map(lambda t: self._template_to_regex(t), self.FILE_STRUCTURE_TEMPLATES))
-        
-        for regex in file_parse_regexs:
-            m = re.match(regex, script_path) # NOTE: script path is relative to library dir (this.path)
-            if m:
-                author = None
-                org = None
-                script_name = None # name is handled in _parse_config(script_path)
-                script_file_name_ext = m.groups()[-1] # includes extension
-                script_file_name = script_file_name_ext.split('.')[0]
-                
-                if len(m.groups()) >= 2: 
-                    script_name = m.groups()[-2] 
-                if len(m.groups()) >= 3:
-                    author = m.groups()[-3]
-                if len(m.groups()) == 4:
-                    org = m.groups()[-4]
+        parse_script_path_regex = self._template_to_regex(self.FILE_STRUCTURE_TEMPLATE)
+        match = re.match(parse_script_path_regex, script_path)
 
+        if not match:
+            self.logger.error(f'CadLibrary::_script_path_to_script(): Cannot parse script_path {script_path}. Please make sure you use the file structure "{self.FILE_STRUCTURE_TEMPLATE}" in library root "{self.path}"!')
+            return None
+        else:
+            script_path_values = match.groupdict()
+
+            if Version.isvalid(script_path_values['version']):
+                self.logger.error(f'CadLibrary::_script_path_to_script(): Script at path "{script_path}" has invalid semversion. Skipped! Please check!')
+                return None
+            else:
                 base_script = self._parse_config(script_path)
-                base_script.name = base_script.name.lower() # always lowercase
+                
+                base_script.name = f"{script_path_values['org']}/{script_path_values['name']}".lower() # name is always lowercase
+                base_script.version = script_path_values['version']
+                base_script.id = f"{base_script.name}/{base_script.version}"
+                base_script.org = script_path_values['org']
+                
                 self._set_script_dir(base_script.name, script_path)
 
-                # getting extra info from path
+                # try getting extra info from path
                 base_script.code = self._get_code_from_script_path(script_path)
                 base_script.script_cad_language = self._get_code_cad_language(script_path)
                 base_script.created_at = self._get_script_created_at(script_path)
                 base_script.updated_at = self._get_script_created_at(script_path)
-                base_script.author = author
-                base_script.org = org
 
-                return base_script
+        return base_script
 
 
     def _get_script_created_at(self,script_path:str) -> datetime: # NOTE: path from library
@@ -639,6 +661,36 @@ class CadLibrary:
 
     #### UTILS ####
 
+    def _setup_logger(self):
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(level=logging.INFO)
+
+        try:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)-4s %(message)s')
+            handler.setFormatter(formatter)
+
+            if (self.logger.hasHandlers()):  # see: http://tiny.cc/v5w6gz
+                self.logger.handlers.clear()
+
+            self.logger.addHandler(handler)
+
+        except Exception as e:
+            self.logger.error(e)
+
+    
+    def _check_path(self, rel_path:str) -> str:
+        # rel_path is related to the root of this project (occilib/..)
+        path = os.path.realpath(
+            os.path.join(
+                os.path.dirname(
+                    os.path.dirname(__file__)), rel_path))
+
+        self.path = path if os.path.isdir(path) else None
+        return self.path
+
     def remove_compute_files(self, dir):
         files = os.listdir(dir)
         for f in files:
@@ -648,9 +700,9 @@ class CadLibrary:
     def _print_library_overview(self):
 
         self.logger.info('**** OCCI COMPONENTS LIBRARY LOADED ****')
-        self.logger.info(f'Scripts: {len(self.scripts)}')
-        for script in self.scripts:
-            self.logger.info(f'- "{script.name}" [{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
+        self.logger.info(f'Scripts: {len(self.latest_scripts)}')
+        for name, script in self.latest_scripts.items():
+            self.logger.info(f'- "{script.name}" {self.script_versions[script.name]}[{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
         self.logger.info('********')
 
     def _get_lines_of_code(self,code:str) -> int:

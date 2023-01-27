@@ -15,7 +15,7 @@ import base64
 import json
 import itertools
 
-from .models import ScriptCadLanguage, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
+from .models import ScriptCadLanguage, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
 
 
@@ -56,7 +56,8 @@ class CadScript(BaseModel):
     status:EndpointStatus = 'success'
     name:str # always lowercase
     author:str = None
-    org:str = None
+    license:ModelContentLicense = None
+    org:str = None # namespace (shall we rename this eventually?)
     url:str = None # url of the endpoint where the script can be found
     description:str = None 
     created_at:datetime = datetime.now()

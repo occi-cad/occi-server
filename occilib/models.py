@@ -35,6 +35,23 @@ class ModelUnits(str, Enum):
     foot = 'foot'
     mile = 'mile'
 
+class ModelContentLicense(str, Enum):
+    # see: https://library.macewan.ca/services/3d-printing/licensing-and-copyright-for-3d-prints
+    copyright = 'copyright'
+    trademarked = 'trademarked'
+    CC_BY = 'CC_BY'
+    CC_BY_SA = 'CC_BY_SA'
+    CC_BY_NO = 'CC_BY_NO'
+    CC_BY_NC = 'CC_BY_NC'
+    CC_BY_NC_SA = 'CC_BY_NC_SA'
+    CC_BY_NC_ND = 'CC_BY_NC_ND'
+
+
+    
+
+    
+
+
 class ScriptCadLanguage(str,Enum):
     cadquery = 'cadquery'
     archiyou = 'archiyou'

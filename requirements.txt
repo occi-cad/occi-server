@@ -8,3 +8,4 @@ redis
 cadquery==2.2.0b1
 numpy
 whoosh
+semver>=3.0.0.dev4
