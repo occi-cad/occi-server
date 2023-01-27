@@ -48,7 +48,7 @@ class CadLibrarySearch:
         Path(lib_dir_path).mkdir(parents=True, exist_ok=True)
         self.index = create_in(lib_dir_path, schema)
         index_writer = self.index.writer()
-        for script in self.library.scripts:
+        for script in self.library.latest_scripts.values(): # for now only show latest scripts in search!
             index_writer.add_document(**script.dict())
         index_writer.commit()
         self.parser = MultifieldParser(self.SEARCHABLE_FIELDS, schema=schema)        

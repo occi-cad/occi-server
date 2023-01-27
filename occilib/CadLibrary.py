@@ -49,8 +49,8 @@ class CadLibrary:
     path = None # absolute path to directory of CadScripts
     scripts:List[CadScript] = [] # all scripts
 
-    latest_scripts:Dict[str,CadScript] = {} # only the latest scripts by unique name
-    script_versions:Dict[str,List[CadScript]] = {}
+    latest_scripts:Dict[str,CadScript] = {} # only the latest scripts by unique namespace ({org}/{name})
+    script_versions:Dict[str,List[CadScript]] = {} # by unique namespace ({org}/{name})
     
     dirs_by_script_name:Dict[str,str] = {}
 
@@ -85,18 +85,18 @@ class CadLibrary:
         '''
         
         for script in self.scripts:
-            scripts_by_name = list(filter(lambda s: s.name == script.name, self.scripts))
-            if len(scripts_by_name) == 1:
-                self.latest_scripts[script.name] = script
-                self.script_versions[script.name] = [script.version]
+            scripts_by_namespace = list(filter(lambda s: s.name == script.name, self.scripts))
+            if len(scripts_by_namespace) == 1:
+                self.latest_scripts[script.namespace] = script
+                self.script_versions[script.namespace] = [script.version]
             else:
                 if not self.latest_scripts.get(script.name):
-                    scripts_by_name_sorted = sorted(scripts_by_name, key=lambda s: s.version)
-                    self.latest_scripts[script.name] = scripts_by_name_sorted[-1] # pick last one ordered by semver
-                    self.script_versions[script.name] = [s.version for s in scripts_by_name_sorted]
+                    scripts_by_namespace_sorted = sorted(scripts_by_namespace, key=lambda s: s.version)
+                    self.latest_scripts[script.namespace] = scripts_by_namespace_sorted[-1] # pick last one ordered by semver
+                    self.script_versions[script.namespace] = [s.version for s in scripts_by_namespace_sorted]
 
 
-    def get_script_request(self, name:str, version:str=None) -> CadScriptRequest:
+    def get_script_request(self, org:str, name:str, version:str=None) -> CadScriptRequest:
         '''
             Get script with given name 
         '''
@@ -107,20 +107,25 @@ class CadLibrary:
 
         script = None
         if version is None:
-            script = self.latest_scripts.get(name) 
+            script = self.latest_scripts.get(f'{org}/{name}') # namespace
         else:
-            l = list(filter(lambda s: (s.name == name and s.version == version), self.scripts))
+            l = list(filter(lambda s: (s.org == org and s.name == name and s.version == version), self.scripts))
             if l:
                 script = l[0]
 
         if not script:
-            self.logger.error(f'CadLibrary:get_script(name): Could not find script with name "{name}" and version "{version}" [optional] in library!')
+            self.logger.error(f'CadLibrary:get_script_request(org, name, version): Could not find script with org "{org}", name "{name}" and version "{version}" [optional] in library!')
             return None
         
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
         script_request.request.created_at = datetime.now() # we need to refresh created_at (the original request ismade when the script is loaded)
 
         return script_request
+
+    def get_script_versions(self, name:str) -> List[str]:
+
+        return self.script_versions.get(name)
+
 
     def _load_scripts_json(self, rel_path:str) -> List[CadScriptRequest]:
         # rel_path is related to the root of this project (occilib/..)
@@ -219,10 +224,11 @@ class CadLibrary:
             else:
                 base_script = self._parse_config(script_path)
                 
-                base_script.name = f"{script_path_values['org']}/{script_path_values['name']}".lower() # name is always lowercase
+                base_script.org = script_path_values['org'].lower() # org is always lowercase
+                base_script.name = script_path_values['name'].lower() # name is always lowercase
+                base_script.namespace = f'{base_script.org}/{base_script.name}'
                 base_script.version = script_path_values['version']
-                base_script.id = f"{base_script.name}/{base_script.version}"
-                base_script.org = script_path_values['org']
+                base_script.id = f"{base_script.org}/{base_script.name}/{base_script.version}"
                 
                 self._set_script_dir(base_script.name, script_path)
 
@@ -698,7 +704,7 @@ class CadLibrary:
         self.logger.info('**** OCCI COMPONENTS LIBRARY LOADED ****')
         self.logger.info(f'Scripts: {len(self.latest_scripts)}')
         for name, script in self.latest_scripts.items():
-            self.logger.info(f'- "{script.name}" {self.script_versions[script.name]}[{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
+            self.logger.info(f'- "{script.namespace}" {self.script_versions[script.namespace]}[{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
         self.logger.info('********')
 
     def _get_lines_of_code(self,code:str) -> int:

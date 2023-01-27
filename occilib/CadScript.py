@@ -52,12 +52,13 @@ class CadScript(BaseModel):
     the different steps of CADScript handling: parsing, compute request, compute and results
 
     """
-    id:str = None # runtime instance id
+    id:str = None # unique id for this script {org}/{name}/{version}
+    namespace:str = None # unique endpoint namespace {org}/{name}
     status:EndpointStatus = 'success'
+    org:str = None
     name:str # always lowercase
     author:str = None
     license:ModelContentLicense = None
-    org:str = None # namespace (shall we rename this eventually?)
     url:str = None # url of the endpoint where the script can be found
     description:str = None 
     created_at:datetime = datetime.now()

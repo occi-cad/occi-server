@@ -32,7 +32,7 @@ from .CadLibrary import CadLibrary
 from .celery_tasks import celery as celery_app
 from .celery_tasks import compute_job_cadquery,compute_job_archiyou
 
-from kombu import Exchange, Queue, Connection
+from kombu import Exchange, Queue
 
 from dotenv import dotenv_values
 CONFIG = dotenv_values()  
@@ -168,14 +168,36 @@ class ModelRequestHandler():
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
         """
             Handle request coming from API
-            Prepare a CadScriptRequest instance with request in it
-            and get from cache or submit to compute workers
+            
+            Normal operation:
+                Prepare a CadScriptRequest instance with request in it
+                and get from cache or submit to compute workers
+            Special entity request 'req.script_special_requested_entity':
+                Print out versions or params for introspection
+
         """
 
         if req is None or not isinstance(req, ModelRequestInput):
             m = 'ModelRequestHandler::handle(script): No request received'
             self.logger.error(m)
             raise HTTPException(500, detail=m) # raise http exception to give server error
+
+        script = self.library.get_script_request(org=req.script_org, name=req.script_name) # this gets the latest version
+
+        # special entity request (special_requested_entity)
+        if req.script_special_requested_entity is not None:
+            # check if script exists
+            if script:
+                if req.script_special_requested_entity == 'versions':
+                    return self.library.get_script_versions(name=script.name)
+                elif req.script_special_requested_entity == 'params':
+                    return script.params
+                elif req.script_special_requested_entity == 'presets':
+                    return script.param_presets
+
+        # always make sure we have a version, redirect if needed
+        if req.script_version is None:
+            return RedirectResponse(f'/{script.namespace}/{script.version}{req.get_param_query_string()}') # return to default version, forward params
 
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
@@ -189,7 +211,6 @@ class ModelRequestHandler():
             else:
                 # only a specific format model as output (we skip loading the result.json and serve the model file directly)
                 return self.library.get_cached_model(requested_script)
-
 
         else:
             # no cache - but already computing?
@@ -321,7 +342,7 @@ class ModelRequestHandler():
         if set_compute_status:
             self.library.set_script_model_is_computing(script, task_id)
 
-        return RedirectResponse(f'{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
+        return RedirectResponse(f'/{script.org}/{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
 
 
     def _req_to_script_request(self,req:ModelRequestInput) -> CadScriptRequest:
@@ -331,10 +352,10 @@ class ModelRequestHandler():
         if not isinstance(self.library, CadLibrary):
             raise HTTPException(500, detail='ModelRequestHandler::_req_to_script_request(req): No library loaded. Cannot handle request!') # raise http exception to give server error
 
-        script_request = self.library.get_script_request(req.script_name)
+        script_request = self.library.get_script_request(org=req.script_org, name=req.script_name, version=req.script_version)
 
         if not script_request:
-            raise HTTPException(500, detail=f'ModelRequestHandler::_req_to_script_request(req): Cannot get script "{req.script_name}" from library!')
+            raise HTTPException(500, detail=f'ModelRequestHandler::_req_to_script_request(req): Cannot get script with name "{req.script_name}" and version "{req.script_version}" [optional] from library!')
 
         script_request.request.format = req.format
         script_request.request.output = req.output # set format in which to return to API (full=json, model return results.models[{format}])

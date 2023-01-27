@@ -47,11 +47,6 @@ class ModelContentLicense(str, Enum):
     CC_BY_NC_ND = 'CC_BY_NC_ND'
 
 
-    
-
-    
-
-
 class ScriptCadLanguage(str,Enum):
     cadquery = 'cadquery'
     archiyou = 'archiyou'
@@ -81,11 +76,24 @@ class ModelRequestInput(BaseModel):
         ie: bracket?width=100
         Is is then turned into a generic ModelRequest
     """
-    script_name:str = None # script name
+    script_org:str = None # always lowercase
+    script_name:str = None # always lowercase
+    script_version:str = None
+    script_special_requested_entity:str = None # requested entity: None=script, versions, params, presets
     format: ModelFormat = 'step'
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
     # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
+
+    def get_param_query_string(self) -> str:
+
+        query_key_vals = []
+        for k,v in self.dict().items():
+            if 'script_' not in k: # a hacky way to avoid the internal properties
+                query_key_vals.append(f'{k}={v}')
+        
+        return '?' + '&'.join(query_key_vals)
+
 
 class ModelResult(BaseModel):
     id:str = None # name + param hash = instance hash
