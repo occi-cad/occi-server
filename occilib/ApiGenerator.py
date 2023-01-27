@@ -103,6 +103,7 @@ class ApiGenerator:
             req.script_special_requested_entity = 'presets'
             return await self.request_handler.handle(req)
 
+        # NOTE: Don't add copies of the above endpoints in POST for now. For clarity
         '''
         @api.post(f'/{script.name}', tags=[script.name])
         async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
