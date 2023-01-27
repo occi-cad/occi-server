@@ -68,7 +68,7 @@ class CadLibrarySearch:
                 for r in results:
                     # add url on the fly for now
                     result_dict = dict(r)
-                    result_dict['url'] = f"{CONFIG['API_ROOT_URL']}/{result_dict['name']}" if CONFIG.get('API_ROOT_URL') else None
+                    result_dict['url'] = f"{CONFIG['API_ROOT_URL']}/{result_dict['namespace']}" if CONFIG.get('API_ROOT_URL') else None
                     result_dicts.append(result_dict)
                 return result_dicts
             else:

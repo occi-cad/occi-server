@@ -34,6 +34,9 @@ from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResul
 from .CadLibrarySearch import CadLibrarySearch
 from .Param import ParamConfigNumber, ParamConfigText
 
+from dotenv import dotenv_values
+CONFIG = dotenv_values()
+
 class CadLibrary:
 
     DEFAULT_PATH = './scriptlibrary' # relative to script
@@ -229,6 +232,7 @@ class CadLibrary:
                 base_script.namespace = f'{base_script.org}/{base_script.name}'
                 base_script.version = script_path_values['version']
                 base_script.id = f"{base_script.org}/{base_script.name}/{base_script.version}"
+                base_script.url = f"{CONFIG['API_ROOT_URL']}/{base_script.namespace}" if (CONFIG and CONFIG.get('API_ROOT_URL')) else None
                 
                 self._set_script_dir(base_script.name, script_path)
 
