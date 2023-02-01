@@ -329,7 +329,7 @@ class ModelRequestHandler():
             asgiref uses threads (see: https://github.com/django/asgiref/blob/main/asgiref/sync.py)
         """
         async def wrapper(*args, **kwargs):
-            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=False)() # includes results. thread_sensitive is needed!
+            compute_result:CadScriptResult = await sync_to_async(task.get,thread_sensitive=True)() # includes results. thread_sensitive is needed for fast batch processing
             return compute_result
         return wrapper
 

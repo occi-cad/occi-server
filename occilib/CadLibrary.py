@@ -24,6 +24,7 @@ import json
 import base64
 import asyncio
 import tempfile
+import uuid
 
 from typing import List, Dict, Any
 
@@ -56,6 +57,9 @@ class CadLibrary:
     script_versions:Dict[str,List[CadScript]] = {} # by unique namespace ({org}/{name})
     
     dirs_by_script_name:Dict[str,str] = {}
+
+    _compute_batch_counters = {} # { uuid1: 13, uuid2: 12 } 
+    _compute_batch_totals = {} # total number of tasks in batch { uuid1: 200 } 
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
         """
@@ -544,7 +548,6 @@ class CadLibrary:
         result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
 
         if script_result.is_cachable():
-            self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model result can be cached. Cache directory: {result_cache_dir}')
             # place total JSON response in cache
             Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
 
@@ -563,7 +566,8 @@ class CadLibrary:
                     with open(f'{result_cache_dir}/result.gltf', 'wb') as f:
                         gltf_binary = base64.b64decode(script_result.results.models['gltf']) # decode base64
                         f.write(gltf_binary)
-                self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Cache put complete')
+
+                #self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model variant cached in directory: {result_cache_dir} [{batch_count_str}]')
             else:
                 self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
 
@@ -572,6 +576,10 @@ class CadLibrary:
 
         # only allow requested format to be outputted
         script_result = self._apply_single_model_format(script_result)
+
+        # manage batch counters
+        if script_result.request.batch_id is not None:
+            self._compute_batch_counters[script_result.request.batch_id] += 1 # increment
 
         # Depending on request.format and request.output return either full json or file
         if script_result.request.output == 'full':
@@ -601,20 +609,69 @@ class CadLibrary:
 
     #### CACHE PRE CALCULATION AND ADMIN ####
 
-    async def _submit_and_handle_compute_script_task(self, script:CadScript, param_values:dict) -> CadScriptResult:
+    async def _submit_and_handle_compute_script_task(self, script:CadScript, param_values:dict, batch_id:str=None) -> CadScriptResult:
         """
             Submit script to compute workers and wait and handle the result asynchronously 
             The result is set in the cache on disk
         """
     
-        script_request = self._make_cache_compute_script_request(script, param_values)
+        script_request = self._make_cache_compute_script_request(script, param_values, batch_id)
         script_result = await self.request_handler.compute_script_request(script_request)
         
         self.checkin_script_result_in_cache_and_return(script_result)
 
-        self.logger.info(f'CadLibrary::_submit_compute_script_task(): Script "{script_result.name}": model "{script_result.request.hash}" succesfully computed and cached. Took: {script_result.results.duration} ms')
+        batch_id = script_result.request.batch_id
+        batch_count = self._compute_batch_counters[batch_id] if batch_id else None
+        batch_total = self._compute_batch_totals[batch_id] if batch_id else None
+        batch_count_str = f'Batch count: {batch_count}/{batch_total}' if batch_id is not None else ''
+        self.logger.info(f'CadLibrary::_submit_compute_script_task(): Script "{script_result.name}": model "{script_result.request.hash}" submitted and handled. Took: {script_result.results.duration} ms. {batch_count_str}')
+
+        # detect end of batch
+        if batch_id and (batch_count == batch_total):
+            self.logger.info(f'==== END OF BATCH "{batch_id}" ====')
+            del self._compute_batch_counters[batch_id]
+            del self._compute_batch_totals[batch_id]
+            # do something more later
+            
+
 
         return script_result
+
+    def compute_script_cache(self, org:str, name:str) -> bool:
+        '''
+            Given a script org and name compute its cache
+        '''
+        
+        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
+        self.request_handler = ModelRequestHandler(library=self)
+
+        script = self.get_script_request(org, name)
+        if script is None:
+            self.logger.error(f'CadLibrary::compute_script_cache: Can not get script with org="{org}" and name="{name}"')
+            return False
+        
+        if not script.is_cachable():
+            self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
+            return False
+
+        # setup batch info
+        num_variants = script.get_num_variants()
+        compute_batch_id = str(uuid.uuid4())
+        self._compute_batch_counters[compute_batch_id] = 0
+        self._compute_batch_totals[compute_batch_id] = num_variants
+
+        self.logger.info(f'==== START COMPUTE CACHE FOR SCRIPT "{script.name}" with {num_variants} model variants ====')
+        
+        async_compute_tasks = []            
+        for hash,param_values in script.iterate_possible_model_params_dicts():
+            # NOTE: hash is omitted
+            async_compute_tasks.append(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
+    
+        loop = asyncio.get_event_loop()
+        #tasks = asyncio.gather(*async_compute_tasks)
+        tasks = asyncio.wait(async_compute_tasks)
+        loop.run_until_complete(tasks) # results are already handled
+        loop.close()
 
 
     def compute_cache(self):
@@ -645,11 +702,12 @@ class CadLibrary:
         
 
 
-    def _make_cache_compute_script_request(self, script:CadScript, param_dict:dict) -> CadScriptRequest:
+    def _make_cache_compute_script_request(self, script:CadScript, param_dict:dict, batch_id:str=None) -> CadScriptRequest:
 
         script_request = CadScriptRequest(**script.dict())
         script_request.request.params = self.request_handler.param_dict_to_param_instance(param_dict)
         script_request.request.hash = script_request.hash()
+        script_request.request.batch_id = batch_id
 
         return script_request
 

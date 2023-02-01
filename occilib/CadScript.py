@@ -8,7 +8,7 @@
 """
 
 from datetime import datetime
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Tuple, Iterator
 from pydantic import BaseModel
 import hashlib
 import base64
@@ -29,7 +29,9 @@ class ModelRequest(BaseModel):
     format: ModelFormat = 'step' # requested output format of the model
     output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
+    batch_id: str = None # some id to group requests 
     meta: dict = {} # TODO
+    
 
     def get_param_query_string(self) -> str:
         '''
@@ -59,11 +61,11 @@ class CadScript(BaseModel):
     name:str # always lowercase
     author:str = None
     license:ModelContentLicense = None
+    version:str = None
     url:str = None # url of the endpoint where the script can be found
     description:str = None 
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
-    version:str = None
     prev_version:str = None
     safe:bool = False # if validated as safe code
     published:bool = True # if available to the public
@@ -73,6 +75,7 @@ class CadScript(BaseModel):
     code: str  = None# the code of the CAD script
     script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
     script_cad_version:str = None # not used currently
+    script_cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
 
     def hash(self, params: Dict[str, ParamInstance]=None) -> str:
@@ -127,6 +130,7 @@ class CadScript(BaseModel):
             Get the parameter sets (in {'param_name':value} format) of all possible parametric models
             Also return the model hash in key
             Resulting return data: { 'hash1' : { param_name: value, {..} }, 'hash2' : {...}}
+            !!!! IMPORTANT: Can be slow !!!!
         """
 
         if self.is_cachable() is False:
@@ -166,8 +170,46 @@ class CadScript(BaseModel):
 
         return all_model_param_sets
                     
+    
+    def iterate_possible_model_params_dicts(self) -> Iterator[Tuple[str, dict]]: # hash, { param1: { value: x }}
 
+        '''
+            Iterator over all combinations of param values
+        '''
 
+        all_values_per_parameter = []
+        for param in self.params.values():
+            all_values_per_parameter.append(param.values())
+
+        for combination in itertools.product(*all_values_per_parameter):
+            param_values = {}
+            for index,value in enumerate(combination):
+                param_name = list(self.params.values())[index].name
+                param_values[param_name] = value
+
+            # convert to Dict[ParamInstance] # TODO: remove this in between step eventually
+            param_set:Dict[Dict[ParamInstance]] = {}
+            for k,v in param_values.items():
+                param_set[k] = ParamInstance(value=v)
+
+            param_set_hash = self.hash(param_set)
+            yield param_set_hash, param_values
+
+    def get_num_variants(self) -> int:
+
+        '''
+            Get total number of variants for this script:
+            All possible values of every parameter (NVP..NVPn)
+            num variants = NVP1 * NVP2 * ... NVPN
+        '''
+
+        num_combinations = 1
+        for param_obj in self.params.values():
+            num_combinations *= len(param_obj.values())
+
+        return num_combinations
+
+        
 
 class CadScriptRequest(CadScript):
     """

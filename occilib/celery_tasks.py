@@ -98,7 +98,7 @@ def compute_job_cadquery(self,script:str): # json of CadScript
     return script_result.dict()
 
 #### DUMMY ARCHIYOU COMPUTE TASK ####
-@celery.task(name='archiyou.compute', bind=True)
+@celery.task(name='archiyou.compute', bind=True, delivery_mode=1)
 def compute_job_archiyou(self,script:str):
     # dummy for sending to broker: real work is done by archiyou nodejs worker
     return None
