@@ -42,7 +42,7 @@ class ModelRequestHandler():
     #### SETTINGS ####
     WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 3
     REDIRECTING_COMPUTING_STATE = 'job'
-    CAD_SCRIPT_ENGINES = ['cadquery', 'archiyou']
+    CAD_SCRIPT_ENGINES = ['cadquery'] # ['archiyou'] - TODO: make a good switching method to define engine you want to run
 
     #### END SETTINGS
 
@@ -84,9 +84,9 @@ class ModelRequestHandler():
             Check if Celery can connect to its backend(s) and if there are workers for both cad script engines
         '''
 
+        self.logger.info('**** CHECKING CELERY CONNECTIONS ****')
+
         try:
-            self.logger.info('**** CHECKING CELERY CONNECTIONS ****')
-            
             self.celery.control.inspect(timeout=1.0).ping()
             self.celery_connected = True
             self.logger.info('ModelRequestHandler::check_celery: Connected to RMQ backend!')
@@ -97,9 +97,12 @@ class ModelRequestHandler():
                 return False
 
             # NOTE: inspecting active queues do not work with archiyou node-celery worker
+            '''
+            # DISABLE AY FOR NOW
             if self.test_archiyou_worker() is True:
                 if 'archiyou' not in self.available_scriptengine_workers:
                     self.available_scriptengine_workers.append('archiyou') 
+            '''
             
             for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
                 queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None

@@ -32,7 +32,7 @@ class CadLibrarySearch:
     SEARCHABLE_FIELDS = ['name', 'author', 'org', 'description', 'units', 'code', 'script_cad_language']
 
     library = None
-    query_parser:MultifieldParser = None
+    parser:MultifieldParser = None
     index:FileIndex = None
 
     def __init__(self, library):
@@ -57,8 +57,13 @@ class CadLibrarySearch:
         op = whoosh.qparser.OperatorsPlugin(And=" and ", Or=" or ")
         self.parser.replace_plugin(op)
 
+        # add fuzzy text search
+        self.parser.add_plugin(whoosh.qparser.FuzzyTermPlugin())
+
     def search(self, q:str) -> List[CadScript]:
 
+        # Add search fuzzyness of distance 2. See: https://whoosh.readthedocs.io/en/latest/parsing.html
+        q += '~2'
         query_obj = self.parser.parse(q)
         
         with self.index.searcher() as searcher:

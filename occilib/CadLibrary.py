@@ -669,7 +669,7 @@ class CadLibrary:
     
         loop = asyncio.get_event_loop()
         #tasks = asyncio.gather(*async_compute_tasks)
-        tasks = asyncio.wait(async_compute_tasks)
+        tasks = asyncio.wait(async_compute_tasks) # use wait instead of gather because its easier
         loop.run_until_complete(tasks) # results are already handled
         loop.close()
 

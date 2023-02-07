@@ -1,6 +1,6 @@
 import uvicorn as uvicorn
 from starlette.responses import RedirectResponse
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Response, status
 from celery.result import AsyncResult
 
 from typing import List, Dict
@@ -36,7 +36,7 @@ async def index():
 #### COMPUTING JOB STATUS ####
 
 @app.get('/{script_org}/{script_name}/{script_instance_hash}/job/{celery_task_id}')
-async def get_model_compute_task(script_name:str, script_instance_hash:str, celery_task_id:str):
+async def get_model_compute_task(script_name:str, script_instance_hash:str, celery_task_id:str, response: Response):
     """
         If a compute takes longer then a defined time (see ModelRequestHandler.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT)
         The user is redirected to this url which supplies information on the job
@@ -75,6 +75,7 @@ async def get_model_compute_task(script_name:str, script_instance_hash:str, cele
            raise HTTPException(status_code=404, detail="Compute task not found or in error state. Please go back to original request url!") 
         job.celery_task_status = celery_task_result.status
         
+        response.status_code = status.HTTP_202_ACCEPTED # special code to signify the job is still being processed
         return job.dict() # return status of job 
             
 
