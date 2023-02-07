@@ -16,7 +16,6 @@ The stack is fully dockerized. You can either set up the full stack locally, or 
 ``` 
     docker-compose up
 ```
-
 You have now all the infrastructure available:
 * REST API: localhost:8090
 * RabbitMQ: localhost:5672 and dashboard on 15672
@@ -32,5 +31,6 @@ You have now all the infrastructure available:
 ## Open Toolchain Foundation    
 
 This project is supported by the [Open Toolchain Foundation (OTF)](https://opentoolchain.org/) and has contributors from the [CadQuery](https://github.com/CadQuery/cadquery) and [Archiyou](https://archiyou.com) teams.
+
 
 
