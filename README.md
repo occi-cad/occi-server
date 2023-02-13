@@ -26,12 +26,17 @@ git clone https://github.com/occi-cad/scriptlibrary
 ``` 
     docker-compose up
 ```
-4. Once Go to localhost:8090 to see the OCCI server basic information
+4. Once everything is started up and connected go to localhost:8090 to see the OCCI server basic information
 5. Get your first parametric model from OCCI example library. Go to url: http://localhost:8090/tests/box. This will give you a parametric box in STEP file. Use http://localhost:8090/tests/box?output=full to see more information. 
 
 ## OCCI API docs
 
-We have generated API docs. Go to http://localhost:8090/docs on your OCCI server for all query possibilities. 
+We have auto-generated API docs. Go to http://localhost:8090/docs on your OCCI server for all query possibilities. Here are the basics:
+
+* {ROOT}/{org}/{name} - Access the default version of a script
+**format=step|stl|gltf - File format of model (GLTF not supported in CQ for now!)
+**output=full|model - return a full JSON response or just the model file in given format (default=STEP)
+* Search: {ROOT}/search?q={search_string}
 
 ## Deploy in Production
 
