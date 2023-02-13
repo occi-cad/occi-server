@@ -96,8 +96,6 @@ class ModelRequestHandler():
                 return False
 
             # NOTE: inspecting active queues do not work with archiyou node-celery worker
-            self.logger.info('***** CONFIG ********')
-            self.logger.info(os.environ)
             ay_flag = os.environ.get(self.CAD_SCRIPT_ENGINES['archiyou'])
             if ay_flag == '1' and self.test_archiyou_worker() is True:
                 if 'archiyou' not in self.available_scriptengine_workers:
