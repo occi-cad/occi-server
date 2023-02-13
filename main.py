@@ -1,3 +1,4 @@
+import os
 import uvicorn as uvicorn
 from starlette.responses import RedirectResponse
 from fastapi import FastAPI, HTTPException, Depends, Response, status
@@ -9,9 +10,6 @@ from occilib.CadLibrary import CadLibrary
 from occilib.CadScript import CadScriptResult
 from occilib.ApiGenerator import ApiGenerator
 from occilib.models import SearchQueryInput
-
-from dotenv import dotenv_values
-CONFIG = dotenv_values()
 
 library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
@@ -28,9 +26,9 @@ api_generator.generate_endpoints(api=app, scripts=scripts)
 @app.get("/")
 async def index():
     return {
-        'library': CONFIG.get('OCCI_LIBRARY_NAME', 'unnamed OCCI library. See settings in .env'),
-        'maintainer': CONFIG.get('OCCI_LIBRARY_MAINTAINER'),
-        'maintainer_email': CONFIG.get('OCCI_LIBRARY_MAINTAINER_EMAIL'),
+        'library': os.environ.get('OCCI_LIBRARY_NAME', 'unnamed OCCI library. See settings in .env'),
+        'maintainer': os.environ.get('OCCI_LIBRARY_MAINTAINER'),
+        'maintainer_email': os.environ.get('OCCI_LIBRARY_MAINTAINER_EMAIL'),
     }
 
 #### COMPUTING JOB STATUS ####

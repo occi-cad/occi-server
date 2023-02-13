@@ -8,6 +8,7 @@
 
 """
 
+import os
 import logging
 from fastapi import HTTPException
 from fastapi.responses import Response, RedirectResponse, JSONResponse, FileResponse
@@ -34,15 +35,13 @@ from .celery_tasks import compute_job_cadquery,compute_job_archiyou
 
 from kombu import Exchange, Queue
 
-from dotenv import dotenv_values
-CONFIG = dotenv_values()  
-
 class ModelRequestHandler():
 
     #### SETTINGS ####
     WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 3
     REDIRECTING_COMPUTING_STATE = 'job'
-    CAD_SCRIPT_ENGINES = ['cadquery'] # ['archiyou'] - TODO: make a good switching method to define engine you want to run
+    CAD_SCRIPT_ENGINES = { 'cadquery' : 'OCCI_CADQUERY', 
+                           'archiyou' : 'OCCI_ARCHIYOU' } # execution engines and their flags in .env for turning on or off
 
     #### END SETTINGS
 
@@ -97,13 +96,14 @@ class ModelRequestHandler():
                 return False
 
             # NOTE: inspecting active queues do not work with archiyou node-celery worker
-            '''
-            # DISABLE AY FOR NOW
-            if self.test_archiyou_worker() is True:
+            self.logger.info('***** CONFIG ********')
+            self.logger.info(os.environ)
+            ay_flag = os.environ.get(self.CAD_SCRIPT_ENGINES['archiyou'])
+            if ay_flag == '1' and self.test_archiyou_worker() is True:
                 if 'archiyou' not in self.available_scriptengine_workers:
                     self.available_scriptengine_workers.append('archiyou') 
-            '''
             
+            # test CQ connection through Celery queues
             for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
                 queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
                 if queue_name:
@@ -113,8 +113,11 @@ class ModelRequestHandler():
 
             script_engine_list = '\n - '.join(self.available_scriptengine_workers)
             self.logger.info(f'*** Connected workers for script engine: \n - {script_engine_list}')
-            for engine in self.CAD_SCRIPT_ENGINES:
-                if engine not in self.available_scriptengine_workers:
+
+            #  check if we have the workers that we configured in .env
+            for engine,flag in self.CAD_SCRIPT_ENGINES.items():
+                engine_flag = os.environ.get(flag)
+                if engine_flag == '1' and engine not in self.available_scriptengine_workers:
                     self.logger.error(f'ModelRequestHandler::check_celery: Cad engine "{engine}" has no workers available!')
                     return False
 

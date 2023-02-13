@@ -1,0 +1,61 @@
+version: '3'
+services:
+
+  api:
+    restart: always
+    container_name: occi-rest-api
+    build: .
+    command: uvicorn main:app --app-dir=/occi --host 0.0.0.0
+    env_file:   
+      - ./.env 
+    environment:
+      - OCCI_ARCHIYOU=1 # this will enable a Archiyou worker (default is off)
+    ports:
+      - "8090:8000" # same as local dev server for now
+    volumes:
+      - .:/occi
+    depends_on:
+       - rmq
+       - redis 
+       - cqworker
+       - ayworker
+
+  rmq:
+      restart: always
+      container_name: occi-rmq
+      image: rabbitmq:3-management
+      env_file: # set variables in .env file: RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS
+        - ./.env
+      ports:
+        - "5672:5672" # main - TODO: close when outside port
+        - "15672:15672" # dashboard - TODO: close when outside port
+
+  redis:
+      image: redis:7-alpine
+      container_name: occi-redis
+      ports: 
+        - "6379:6379" # TODO: close after DEBUG
+        
+  cqworker:
+     restart: always
+     container_name: occi-cq-worker
+     build: .
+     command: celery -A occilib.celery_tasks.celery worker --loglevel=info -Q cadquery 
+     volumes: # remove this to load scripts into the image on build
+      - .:/occi
+     depends_on:
+       - rmq
+       - redis
+
+  ayworker:
+    restart: always
+    container_name: occi-ay-worker
+    image: node:16-alpine
+    volumes:
+      - .:/compute-worker # main directory so we can find the .env
+    working_dir: /compute-worker
+    command: node --experimental-specifier-resolution=node ./archiyou-compute-worker/build/index.js
+    depends_on:
+      - rmq
+      - redis
+
