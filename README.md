@@ -2,7 +2,7 @@
 
 Open CAD Components Interface (OCCI) brings parametric components to all by using script CAD engines like CadQuery and Archiyou. Script CAD is very suitable to deliver platform-independant 'open design' parametric CAD content and we hope that OCCI will contribute to that. 
 
-The simplest way to try OCCI is with our [https://github.com/occi-cad/occi-freecad-plugin](FreeCAD plugin). You can find the [https://github.com/occi-cad/occi-cad-spec](OCCI design principles and spec here).
+The simplest way to try OCCI is with our [FreeCAD plugin](https://github.com/occi-cad/occi-freecad-plugin). You can find the [OCCI design principles and spec here](https://github.com/occi-cad/occi-cad-spec).
 
 # OCCI server
 
@@ -17,7 +17,7 @@ Use cases:
 The stack is fully dockerized. To start up a local OCCI server with a default CadQuery worker:
 
 1. Add a .env file to the main directory based on env.example
-2. Add scripts into the 'scriptlibrary' directory in format ./scriptlibrary/{org}/{name}/{version}/{name}.py|js and {name}.json for the config file. There is an [https://github.com/occi-cad/scriptlibrary](OCCI example library) to get you started. Make sure you are in the root directory:
+2. Add scripts into the 'scriptlibrary' directory in format ./scriptlibrary/{org}/{name}/{version}/{name}.py|js and {name}.json for the config file. There is an [OCCI example library](https://github.com/occi-cad/scriptlibrary) to get you started. Make sure you are in the root directory:
 ```
 git clone https://github.com/occi-cad/scriptlibrary
 ```
