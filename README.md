@@ -33,10 +33,10 @@ git clone https://github.com/occi-cad/scriptlibrary
 
 We have auto-generated API docs. Go to http://localhost:8090/docs on your OCCI server for all query possibilities. Here are the basics:
 
-* {ROOT}/{org}/{name} - Access the default version of a script
-** format=step|stl|gltf - File format of model (GLTF not supported in CQ for now!)
-** output=full|model - return a full JSON response or just the model file in given format (default=STEP)
-* Search: {ROOT}/search?q={search_string}
+1. Get script: {ROOT}/{org}/{name} - Access the default version of a script
+    * format=step|stl|gltf - File format of model (GLTF not supported in CQ for now!)
+    * output=full|model - return a full JSON response or just the model file in given format (default=STEP)
+2. Search: {ROOT}/search?q={search_string}
 
 ## Deploy in Production
 
