@@ -756,10 +756,12 @@ class CadLibrary:
         return self.path
 
     def remove_compute_files(self, dir):
-        files = os.listdir(dir)
-        for f in files:
-            if f.endswith(self.COMPUTE_FILE_EXT):
-                os.remove(os.path.join(dir, f))
+
+        if os.path.exists(dir):
+            files = os.listdir(dir)
+            for f in files:
+                if f.endswith(self.COMPUTE_FILE_EXT):
+                    os.remove(os.path.join(dir, f))
 
     def _print_library_overview(self):
 

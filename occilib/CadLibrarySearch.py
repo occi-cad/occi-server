@@ -62,8 +62,8 @@ class CadLibrarySearch:
 
     def search(self, q:str) -> List[CadScript]:
 
-        # Add search fuzzyness of distance 2. See: https://whoosh.readthedocs.io/en/latest/parsing.html
-        q += '~2'
+        # Add search fuzzyness of distance 1. See: https://whoosh.readthedocs.io/en/latest/parsing.html
+        q += '~1'
         query_obj = self.parser.parse(q)
         
         with self.index.searcher() as searcher:
