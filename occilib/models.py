@@ -18,8 +18,10 @@ from pydantic import BaseModel
 # type enum for Parameter
 class ParamType(str,Enum):
     number = 'number'
+    boolean = 'boolean'
     text = 'text'
-    # TODO: more param types
+    options = 'options'
+    
 
 class EndpointStatus(str,Enum):
     success = 'success'
@@ -35,22 +37,24 @@ class ModelUnits(str, Enum):
     foot = 'foot'
     mile = 'mile'
 
+
 class ModelContentLicense(str, Enum):
     # see: https://library.macewan.ca/services/3d-printing/licensing-and-copyright-for-3d-prints
-    copyright = 'copyright'
-    trademarked = 'trademarked'
-    CC_BY = 'CC_BY'
-    CC_BY_SA = 'CC_BY_SA'
-    CC_BY_NO = 'CC_BY_NO'
-    CC_BY_NC = 'CC_BY_NC'
-    CC_BY_NC_SA = 'CC_BY_NC_SA'
-    CC_BY_NC_ND = 'CC_BY_NC_ND'
+    copyright = 'copyright' # The script and model are copyrighted material. Don't reuse without an agreement from the creator
+    trademarked = 'trademarked' # The script and model are copyrighted and trademarked material. Don't reuse without an agreement from the creator
+    CC_BY = 'CC_BY' # This license allows reusers to distribute, remix, adapt, and build upon the material in any medium or format, so long as attribution is given to the creator. The license allows for commercial use.',
+    CC_BY_SA = 'CC_BY_SA' # This license allows reusers to distribute, remix, adapt, and build upon the material in any medium or format, so long as attribution is given to the creator. The license allows for commercial use. If you remix, adapt, or build upon the material, you must license the modified material under identical terms.',
+    CC_BY_NC = 'CC_BY_NC' # This license allows reusers to distribute, remix, adapt, and build upon the material in any medium or format for noncommercial purposes only, and only so long as attribution is given to the creator.',
+    CC_BY_NC_SA = 'CC_BY_NC_SA' # 'This license allows reusers to distribute, remix, adapt, and build upon the material in any medium or format for noncommercial purposes only, and only so long as attribution is given to the creator. If you remix, adapt, or build upon the material, you must license the modified material under identical terms.',
+    CC_BY_ND = 'CC_BY_ND' # 'This license allows reusers to copy and distribute the material in any medium or format in unadapted form only, and only so long as attribution is given to the creator. The license allows for commercial use.',
+    CC_BY_NC_ND = 'CC_BY_NC_ND' # 'This license allows reusers to copy and distribute the material in any medium or format in unadapted form only, for noncommercial purposes only, and only so long as attribution is given to the creator.',
+    CC0 = 'CC0' # (aka CC Zero) is a public dedication tool, which allows creators to give up their copyright and put their works into the worldwide public domain. CC0 allows reusers to distribute, remix, adapt, and build upon the material in any medium or format, with no conditions.',
 
 
 class ScriptCadLanguage(str,Enum):
     cadquery = 'cadquery'
     archiyou = 'archiyou'
-    openscad = 'openscad'
+    openscad = 'openscad' # Not yet supported
 
 class ModelFormat(str,Enum):
     """ Also the extension """

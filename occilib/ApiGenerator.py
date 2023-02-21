@@ -4,7 +4,9 @@
 
 '''
 
-from typing import List
+from typing import List, Any
+from enum import Enum
+
 from fastapi import FastAPI, Depends
 from pydantic import create_model, conint, constr
 import logging
@@ -12,7 +14,8 @@ import logging
 from .CadScript import CadScript
 from .CadLibrary import CadLibrary
 from .ModelRequestHandler import ModelRequestHandler
-from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions
+
 from .models import ModelRequestInput
 
 from .settings import params as PARAM_SETTINGS
@@ -129,8 +132,9 @@ class ApiGenerator:
         BASE_EXEC_REQUEST = ModelRequestInput # this is the basic model for a Script exec request
         PARAM_TYPE_TO_PYTHON_TYPE = {
             'number' : float,
-            'text' : str
-            # TODO: more
+            'text' : str,
+            'options' : str,
+            'boolean' : bool,
         }
         
         fields = {} # dynamic pydantic field definitions
@@ -141,7 +145,7 @@ class ApiGenerator:
 
             if field_type:
                 field_def = self._param_to_field_def(param)
-                fields[param.name] = (field_def, param.default ) # here we plug the default value too
+                fields[param.name] = (field_def, self._get_param_default(param) ) # here we plug the default value too
 
         # now make the Pydantic Input model definition
         EndpointInputModel = create_model(
@@ -152,12 +156,35 @@ class ApiGenerator:
 
         return EndpointInputModel
     
+    def _get_param_default(self,param:ParamConfigBase) -> Any:
+        """
+            Get default value (if not given) for a specific type of param
+        """
+        if param.default is not None:
+            return param.default
+        
+        # do some effort per param type
+        if param.type == 'number':
+            return param.start
+        elif param.type == 'boolean':
+            return False
+        elif param.type == 'text':
+            return 'mytext'
+        elif param.type == 'options':
+            return param.options[0]
+        
+        return None
+        
+    
     def _parse_param_dict(self, param:dict=None) -> ParamConfigBase:
+
+        # NOTE: There is almost the same method in CadLibrary class - TODO: move method into utils
 
         PARAM_TYPE_TO_PYDANTIC_MODEL = {
             'number' : ParamConfigNumber,
             'text' : ParamConfigText,
-            # TODO: More types
+            'boolean' : ParamConfigBoolean,
+            'options' : ParamConfigOptions,
         }
 
         if param:
@@ -180,6 +207,17 @@ class ApiGenerator:
                             strict=True, 
                             min_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MINLENGTH'], 
                             max_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MAXLENGTH'])
+        elif param.type == 'boolean':
+            return bool
+        elif param.type == 'options':
+            # create dynamic enum
+            enum_kv = zip(param.options, param.options)
+            class TempEnum(str, Enum):
+                pass
+            TypeEnum = TempEnum("TypeEnum", enum_kv)
+
+            return TypeEnum
+        
 
     def _add_api_tags(self, script:dict):
 

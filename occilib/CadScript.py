@@ -16,7 +16,7 @@ import json
 import itertools
 
 from .models import ScriptCadLanguage, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
-from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamInstance
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions, ParamInstance
 
 
 class ModelRequest(BaseModel):
@@ -67,10 +67,10 @@ class CadScript(BaseModel):
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
     prev_version:str = None
-    safe:bool = False # if validated as safe code
+    safe:bool = False # if validated as safe code (not implemented yet)
     published:bool = True # if available to the public
     units:ModelUnits = None
-    params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText] = {} # list of param definitions - TODO: combine ParamTypes
+    params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText | ParamConfigBoolean | ParamConfigOptions ] = {} # list of param definitions - TODO: combine ParamTypes
     param_presets:Dict[str, dict] = {} # TODO: presets of parameters by name and then a { param_name: value } dict
     code: str  = None# the code of the CAD script
     script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)

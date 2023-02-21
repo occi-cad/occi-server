@@ -1,9 +1,17 @@
+"""
+    test_library.py
+
+    Some debug functions directly with the CadLibrary class
+
+"""
+
+import os
+os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from occilib.CadLibrary import CadLibrary
 
-#lib = CadLibrary()
-
 lib = CadLibrary()
-#lib._load_scripts_dir()
+print (lib._load_scripts_dir())
 #lib._print_library_overview()
 #print (lib.get_script_request('tests/box', version=0.5))
 #print (lib.get_script_request('tests/box'))

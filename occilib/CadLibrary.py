@@ -33,7 +33,7 @@ from semver.version import Version
 
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
-from .Param import ParamConfigNumber, ParamConfigText
+from .Param import ParamConfigNumber, ParamConfigText, ParamConfigOptions, ParamConfigBoolean
 
 from dotenv import dotenv_values
 CONFIG = dotenv_values()
@@ -244,7 +244,7 @@ class CadLibrary:
                 base_script.code = self._get_code_from_script_path(script_path)
                 base_script.script_cad_language = self._get_code_cad_language(script_path)
                 base_script.created_at = self._get_script_created_at(script_path)
-                base_script.updated_at = self._get_script_created_at(script_path)
+                base_script.updated_at = self._get_script_updated_at(script_path)
 
         return base_script
 
@@ -357,9 +357,11 @@ class CadLibrary:
         TYPE_TO_PARAM_CLASS = {
             'number' : ParamConfigNumber,
             'text' : ParamConfigText,
+            'boolean' : ParamConfigBoolean,
+            'options' : ParamConfigOptions,
         }
 
-        new_params:Dict[str,ParamConfigNumber|ParamConfigText] = {}
+        new_params:Dict[str,ParamConfigNumber|ParamConfigText|ParamConfigBoolean|ParamConfigOptions] = {}
         for name, param in base_script.params.items():
             ParamClass = TYPE_TO_PARAM_CLASS.get(param.type) # name of type is already validated by Pydantic and models.ParamType enum
             orig_param_data = list(filter( lambda param_conf: param_conf['name'] == param.name, script_config['params'].values()))[0]
