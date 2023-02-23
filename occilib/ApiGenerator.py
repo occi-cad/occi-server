@@ -27,14 +27,13 @@ class ApiGenerator:
     script:List[CadScript] = []
     api = None
     api_tags = [] # open API tags
-    
 
-    def __init__(self, library:CadLibrary):
+    def __init__(self, library:CadLibrary, no_workers:bool=False):
 
         self.library = library
 
         if isinstance(self.library, CadLibrary):
-            self.request_handler = ModelRequestHandler(self.library)
+            self.request_handler = ModelRequestHandler(self.library, no_workers)
         else:
             self.error('ApiGenerator::__init__(library): Please supply a library instance to this ApiGenerator')
 

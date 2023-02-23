@@ -3,6 +3,7 @@ import uvicorn as uvicorn
 from starlette.responses import RedirectResponse
 from fastapi import FastAPI, HTTPException, Depends, Response, status
 from celery.result import AsyncResult
+from dotenv import dotenv_values
 
 from typing import List, Dict
 
@@ -10,25 +11,45 @@ from occilib.CadLibrary import CadLibrary
 from occilib.CadScript import CadScriptResult
 from occilib.ApiGenerator import ApiGenerator
 from occilib.models import SearchQueryInput
+from occilib.Admin import Admin
+
+#### IMPORTANT NOTICES ####
+
+""" 
+    Because currently the 'database' of a library and its cache is on server disk 
+    it is seriously recommended to run one FastAPI worker to avoid concurrent writing issues.
+    For high-performant contexts we need to move the scriptslibrary to a database and the cache 
+    to a cloud storage. 
+"""
+
+#### CONFIG HANDLING - FROM ENV VARIABLES (SET IN DOCKER CONTAINER) OR .ENV FILE (FOR LOCAL DEBUG) ####
+
+CONFIG = {
+    **dotenv_values('.env'),
+    **os.environ
+}
+
+#### START MAIN INSTANCES ####
 
 library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
-api_generator = ApiGenerator(library)
+api_generator = ApiGenerator(library, no_workers=(True if CONFIG.get('LOCAL_DEBUG_MODE' ) == '1' else False))
 
 #### CHECK CONNECTION TO RMQ ####
 
-if api_generator.request_handler.check_celery() is False:
+if CONFIG.get('LOCAL_DEBUG_MODE' ) != '1' and api_generator.request_handler.check_celery() is False:
     raise Exception('*** RESTART API - No Celery connection and/or missing workers: Restart API ****') 
 
 app = FastAPI(openapi_tags=api_generator.get_api_tags(scripts))
 api_generator.generate_endpoints(api=app, scripts=scripts)
+admin = Admin(app, api_generator)
 
 @app.get("/")
 async def index():
     return {
-        'library': os.environ.get('OCCI_LIBRARY_NAME', 'unnamed OCCI library. See settings in .env'),
-        'maintainer': os.environ.get('OCCI_LIBRARY_MAINTAINER'),
-        'maintainer_email': os.environ.get('OCCI_LIBRARY_MAINTAINER_EMAIL'),
+        'library': CONFIG.get('OCCI_LIBRARY_NAME', 'unnamed OCCI library. See settings in .env'),
+        'maintainer': CONFIG.get('OCCI_LIBRARY_MAINTAINER'),
+        'maintainer_email': CONFIG.get('OCCI_LIBRARY_MAINTAINER_EMAIL'),
     }
 
 #### COMPUTING JOB STATUS ####

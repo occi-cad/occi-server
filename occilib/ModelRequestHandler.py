@@ -30,9 +30,6 @@ from .Param import ParamConfigBase, ParamInstance
 from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
-from .celery_tasks import celery as celery_app
-from .celery_tasks import compute_job_cadquery,compute_job_archiyou
-
 from kombu import Exchange, Queue
 
 class ModelRequestHandler():
@@ -44,26 +41,34 @@ class ModelRequestHandler():
                            'archiyou' : 'OCCI_ARCHIYOU' } # execution engines and their flags in .env for turning on or off
 
     #### END SETTINGS
-
+    no_workers:bool = False
     library:CadLibrary
-    celery = celery_app # from import celery_tasks
+    celery = None
     celery_connected:bool = False
     available_scriptengine_workers = [] # cadquery, archiyou = queue names
 
-    def __init__(self, library:CadLibrary):
+    def __init__(self, library:CadLibrary, no_workers:bool=False):
             
         self._setup_logger()
+
+        self.no_workers = no_workers
         self.library = library
 
         if not isinstance(self.library, CadLibrary):
             self.logger.error('ModelRequestHandler::__init__(library): Please supply library!') 
 
-        self.setup_celery_exchanges()
+        # setup workers
+        if not no_workers:
+            # only import in connected mode because cadquery and OpenCascade (OCP) trips up locally a lot
+            from .celery_tasks import celery as celery_app
+            self.celery = celery_app # from import celery_tasks
 
-        if self.check_celery() is False:
-            self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
-        else:
-            self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
+            self.setup_celery_exchanges()
+
+            if self.check_celery() is False:
+                self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
+            else:
+                self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
         
 
     def setup_celery_exchanges(self):
@@ -127,6 +132,8 @@ class ModelRequestHandler():
 
     def test_archiyou_worker(self) -> bool:
 
+        from celery_tasks import compute_job_archiyou # dynamic import because celery_tasks need to be avoided in no_workers mode
+
         try:
             result = compute_job_archiyou.apply_async(args=[], kwargs={ 'script' : None })
             result.get()
@@ -136,6 +143,8 @@ class ModelRequestHandler():
             return False
 
     def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
+
+        from celery_tasks import compute_job_archiyou, compute_job_cadquery # dynamic import because celery_tasks need to be avoided in no_workers mode
 
         TASK_METHODS_BY_ENGINE = {
             'cadquery' : compute_job_cadquery, 

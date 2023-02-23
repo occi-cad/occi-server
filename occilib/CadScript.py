@@ -56,7 +56,6 @@ class CadScript(BaseModel):
     """
     id:str = None # unique id for this script {org}/{name}/{version}
     namespace:str = None # unique endpoint namespace {org}/{name}
-    status:EndpointStatus = 'success'
     org:str = None
     name:str # always lowercase
     author:str = None
@@ -78,6 +77,15 @@ class CadScript(BaseModel):
     script_cad_version:str = None # not used currently
     script_cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
+
+    def get_namespace(self) -> str:
+        """
+            Generate namespace
+        """
+        if self.org is not None and len(self.org) > 0 and self.name is not None and len(self.name) > 0:
+            return f'{self.org}/{self.name}'
+        return None
+
 
     def hash(self, params: Dict[str, ParamInstance]=None) -> str:
         """
@@ -217,6 +225,7 @@ class CadScriptRequest(CadScript):
         CadScript that is used to make a request
     """
     
+    status:EndpointStatus = 'success'
     request:ModelRequest = ModelRequest() # just make an empty ModelRequest instance
 
     def get_param_values_dict(self) -> dict:
