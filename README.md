@@ -71,6 +71,7 @@ To quickly turn your CAD scripts into an API:
 }
 ```
 This will make the box parametric and enable OCCI API to check inputs
+
 4. If you run the occi-server stack (see Developer Quickstart) your script should be available at
    _localhost:8090/mycadcompany/mybox/0.5/mybox_
 
