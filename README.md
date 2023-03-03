@@ -16,20 +16,21 @@ Use cases:
 
 The stack is fully dockerized. To start up a local OCCI server with a default CadQuery worker:
 
-1. Add a .env file to the main directory based on env.example
-2. Add scripts into the 'scriptlibrary' directory in format ./scriptlibrary/{org}/{name}/{version}/{name}.py|js and {name}.json for the config file. There is an [OCCI example library](https://github.com/occi-cad/scriptlibrary) to get you started. Make sure you are in the root directory:
+1. git clone https://github.com/occi-cad/occi-server.git
+2. Add a .env file to the main directory based on env.example
+3. Add scripts into the 'scriptlibrary' directory in format ./scriptlibrary/{org}/{name}/{version}/{name}.py|js and {name}.json for the config file. There is an [OCCI example library](https://github.com/occi-cad/scriptlibrary) to get you started. Make sure you are in the root directory:
 ```
 git clone https://github.com/occi-cad/scriptlibrary
 ```
-3. Go into a terminal and run:
+4. Go into a terminal and run:
 
 ``` 
     docker-compose up
 ```
-4. Once everything is started up and connected go to localhost:8090 to see the OCCI server basic information
-5. Get your first parametric model from OCCI example library. Go to url: http://localhost:8090/tests/box. This will give you a parametric box in STEP file. Use http://localhost:8090/tests/box?output=full to see more information. 
+5. Once everything is started up and connected go to localhost:8090 to see the OCCI server basic information
+6. Get your first parametric model from OCCI example library. Go to url: http://localhost:8090/tests/box. This will give you a parametric box in STEP file. Use http://localhost:8090/tests/box?output=full to see more information. 
 
-## OCCI API docs
+## Using an OCCI API
 
 We have auto-generated API docs. Go to http://localhost:8090/docs on your OCCI server for all query possibilities. Here are the basics:
 
