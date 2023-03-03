@@ -38,6 +38,49 @@ We have auto-generated API docs. Go to http://localhost:8090/docs on your OCCI s
     * output=full|model - return a full JSON response or just the model file in given format (default=STEP)
 2. Search: {ROOT}/search?q={search_string}
 
+## Manage and configure your CAD scripts
+
+To quickly turn your CAD scripts into an API:
+
+1. Create a directory _scriptlibrary_ if not exists
+2. Place your scripts (for example _mybox.py_ for Cadquery) in a folder structure like this: 
+    scriptlibrary/{org/author}/{scriptname}/{version}/{scriptname}.py
+    for example: _scriptlibrary/mycadcompany/mybox/0.5/mybox.py_
+3. Also add a simple configuration JSON file called mybox.json in that directory with the following basic information:
+
+```
+{
+    "description" : "A simple test box",
+    "params" : { 
+        "size" : {
+            "type": "number",
+            "start" : 1,
+            "end" : 100,
+            "default" : 50,
+            "description" : "The size of the box",
+            "units" : "mm"
+        }
+    },
+    "param_presets": {
+        "small": { "size" : 5 },
+        "medium": { "size" : 50 },
+        "big": { "size" : 100 }
+    },
+    "license" : "CC0"
+}
+```
+This will make the box parametric and enable OCCI API to check inputs
+4. If you run the occi-server stack (see Developer Quickstart) your script should be available at
+   _localhost:8090/mycadcompany/mybox/0.5/mybox_
+
+You can configure the parameters to your scripts in multiple ways. Currently these parameter types are supported:
+* _number_ -  'start' to 'end' with 'step'
+* _boolean_ 
+* _text_ - optional: 'max_length', 'min_length'
+* _options_ - with 'values' with a list of strings
+
+For more information on optional content of the *.json config file see CadScript.py in occilib/ 
+
 ## Deploy in Production
 
 Use 'docker-compose.prod.yml' if you want to host a OCCI server with a HTTPS certificate and Nginx webserver:
