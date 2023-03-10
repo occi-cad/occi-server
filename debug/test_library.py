@@ -9,6 +9,7 @@ import os
 os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from occilib.CadLibrary import CadLibrary
+from occilib.CadScript import CadScript
 
 lib = CadLibrary()
 print (lib._load_scripts_dir())
@@ -31,4 +32,19 @@ for d in script.iterate_possible_model_params_dicts():
     print(d)
 '''
 
-lib.compute_script_cache(org='tests', name='sphere')
+#lib.compute_script_cache(org='tests', name='sphere')
+
+### ADMIN ###
+
+'''
+test_script = CadScript(name='Test', org='testorg')
+print(test_script)
+print(lib.script_to_library_path(test_script))
+print(lib.script_exists(test_script))
+
+print(lib.script_to_library_path(CadScript(name='steelbeam', org='archiyou', version='0.5')))
+print(lib.script_exists(CadScript(name='steelbeam', org='archiyou', version='0.5'))) # True
+'''
+
+# lib.add_script(CadScript(name='steelbeam', org='archiyou', version='0.5')) # error
+lib.add_script(CadScript(name='testscript', org='testorg', code='b = box();', script_cad_language='archiyou'), overwrite=True)

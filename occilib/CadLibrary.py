@@ -43,7 +43,7 @@ class CadLibrary:
     DEFAULT_PATH = './scriptlibrary' # relative to script
     FILE_STRUCTURE_TEMPLATE = '{org}/{name}/{version}/{script}' # IMPORTANT: linux directory seperator '/' (not '\')
     CADSCRIPT_FILE_GLOB = ['*.py', '*.js']
-    CADSCRIPT_CONFIG_GLOB = ['*.json', '*.yaml'] # TODO: YAML
+    CADSCRIPT_CONFIG_GLOB = ['*.json']
     COMPUTE_FILE_EXT = '.compute'
 
     request_handler = None # set when precomputing cache
@@ -264,6 +264,7 @@ class CadLibrary:
         """
         script_dir_abs_path = os.path.dirname(os.path.realpath(os.path.join(self.path, script_path)))
         script_dir_name = os.path.split(script_dir_abs_path)[-1]
+        script_dir_org = os.path.split(script_dir_abs_path)[-2]
         script_path, script_ext = os.path.splitext(script_path)
         script_name_with_ext = os.path.split(script_path)[-1]
         script_name = script_name_with_ext.split('.')[0]
@@ -297,8 +298,9 @@ class CadLibrary:
                 if script_config:
                     self._set_params_keys_to_names(script_config)
                     # naming priorities: config_file.name, script parent directory name ("script_dir_name") , script file name ("script_name")
+                    chosen_script_org = script_config.get('org') or script_dir_org
                     chosen_script_name = script_config.get('name') or script_dir_name or script_name
-                    base_script = CadScript(**{ 'name': chosen_script_name } | script_config) # CadScript needs a name
+                    base_script = CadScript(**{ 'name': chosen_script_name, 'org' : chosen_script_org } | script_config) # CadScript needs a name and org
                     base_script = self._upgrade_params(base_script, script_config)
                 
             elif script_config_file_ext == '.yaml' or script_config_file_ext == '.yml':
@@ -724,6 +726,69 @@ class CadLibrary:
     def search(self, q:str):
 
         return self.searcher.search(q)
+    
+    #### ADMIN ####
+
+    def add_script(self, script:CadScript, overwrite:bool=False) -> bool:
+
+        if overwrite is False and self.script_exists(script):
+            self.logger.error(f'Script with org "{script.org}" and name "{script.name}" already exists in library! Use flag overwrite True if needed!')
+            return False
+        
+        self.write_script(script)
+
+        return True
+        
+    def write_script(self, script:CadScript) -> bool:
+        """
+            Write script onto disk storage of Library
+            NOTE: will overwrite
+        """
+
+        SCRIPT_LANGUAGE_TO_SCRIPT_EXT = {
+            'cadquery' : 'py',
+            'archiyou' : 'js',
+        }
+
+        if script.code is None: 
+            self.logger.error(f'Cannot write a script without code!')
+            return False
+
+        script_dir = self.script_to_library_path(script)
+        Path(script_dir).mkdir(parents=True, exist_ok=True) # make directory if not exists
+        ext = SCRIPT_LANGUAGE_TO_SCRIPT_EXT.get(script.script_cad_language) or 'py' # default is py
+        script_filepath = f'{script_dir}{os.sep}{script.name}.{ext}'
+        config_filepath = f'{script_dir}{os.sep}{script.name}.json'
+        
+        try:
+            with open(script_filepath, 'w') as f:
+                f.write(script.code) # write script
+            with open(config_filepath, 'w') as f:
+                d = json.loads(script.json())
+                config = {}
+                for k,v in d.items(): # cleans null keys from config
+                    if v is not None and k != 'code':
+                        config[k] = v
+
+                json_pretty_str = json.dumps(config, indent=2) # hack around pydantic lack of pretty print
+                f.write(json_pretty_str) # write config 
+
+            return True
+            
+        except Exception as e:
+            self.logger.error(f'Could not write script: {e}')
+            return False
+
+        
+
+
+    def script_exists(self, script:CadScript) -> bool:
+        # TODO: more robust?
+        return os.path.isdir(self.script_to_library_path(script)) 
+        
+    def script_to_library_path(self, script:CadScript) -> str:
+        script_path = self.FILE_STRUCTURE_TEMPLATE.format(**script.dict() | { 'script' : '' }) # fill in placeholders (script is '' to get directory instead of script filepath)
+        return f'{self.path}{os.sep}{script_path}'
 
     #### UTILS ####
 

@@ -69,6 +69,8 @@ class ModelRequestHandler():
                 self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
             else:
                 self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
+        else:
+            self.logger.info('ModelRequestHandler::__init__(library): **** Celery is disabled because workers are turned off! See no_workers flag ****')
         
 
     def setup_celery_exchanges(self):
@@ -107,12 +109,14 @@ class ModelRequestHandler():
                     self.available_scriptengine_workers.append('archiyou') 
             
             # test CQ connection through Celery queues
-            for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
-                queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
-                if queue_name:
-                    self.logger.info(f'* Worker "{worker_host}" connected to queue: "{queue_name}"')
-                    if queue_name not in self.available_scriptengine_workers:
-                        self.available_scriptengine_workers.append(queue_name)
+            cq_flag = os.environ.get(self.CAD_SCRIPT_ENGINES['cadquery'])
+            if cq_flag:
+                for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
+                    queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
+                    if queue_name:
+                        self.logger.info(f'* Worker "{worker_host}" connected to queue: "{queue_name}"')
+                        if queue_name not in self.available_scriptengine_workers:
+                            self.available_scriptengine_workers.append(queue_name)
 
             script_engine_list = '\n - '.join(self.available_scriptengine_workers)
             self.logger.info(f'*** Connected workers for script engine: \n - {script_engine_list}')

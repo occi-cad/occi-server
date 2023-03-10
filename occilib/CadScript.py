@@ -9,7 +9,7 @@
 
 from datetime import datetime
 from typing import List, Any, Dict, Tuple, Iterator
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 import hashlib
 import base64
 import json
@@ -55,12 +55,12 @@ class CadScript(BaseModel):
 
     """
     id:str = None # unique id for this script {org}/{name}/{version}
-    namespace:str = None # unique endpoint namespace {org}/{name}
-    org:str = None
+    org:str
     name:str # always lowercase
+    namespace:str = None # unique endpoint namespace {org}/{name}
     author:str = None
     license:ModelContentLicense = None
-    version:str = None
+    version:str = '1.0'
     url:str = None # url of the endpoint where the script can be found
     description:str = None 
     created_at:datetime = datetime.now()
@@ -68,22 +68,36 @@ class CadScript(BaseModel):
     prev_version:str = None
     safe:bool = False # if validated as safe code (not implemented yet)
     published:bool = True # if available to the public
-    units:ModelUnits = None
+    units:ModelUnits = 'mm'
     params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText | ParamConfigBoolean | ParamConfigOptions ] = {} # list of param definitions - TODO: combine ParamTypes
     param_presets:Dict[str, dict] = {} # TODO: presets of parameters by name and then a { param_name: value } dict
     public_code: bool = False # if public user of the API can see the source code of the CAD script
     code: str  = None# the code of the CAD script
-    script_cad_language:ScriptCadLanguage = None # cadquery, archiyou or openscad (and many more may follow)
+    script_cad_language:ScriptCadLanguage = 'cadquery' # cadquery, archiyou or openscad (and many more may follow)
     script_cad_version:str = None # not used currently
     script_cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
 
-    def get_namespace(self) -> str:
+    #### INPUT VALIDATATORS ####
+    @validator('name', 'org')
+    def lowercase_name_and_org(cls, value):
+        return value.lower()
+
+    @validator('namespace', always=True)
+    def set_namespace(cls, value, values):
+        # always generate namespace from name and org
+        return cls.get_namespace(None,**values) # this is somewhat hacky: cls is not an instance!
+    
+    #### CLASS METHODS ####
+    def get_namespace(self, org:str=None, name:str=None, **kwargs) -> str:
         """
             Generate namespace
+            The structure is a bit complex because we also take direct args
         """
-        if self.org is not None and len(self.org) > 0 and self.name is not None and len(self.name) > 0:
-            return f'{self.org}/{self.name}'
+        org = org or getattr(self, 'org', None)
+        name = name or getattr(self, 'name', None)
+        if org is not None and len(org) > 0 and name is not None and len(name) > 0:
+            return f'{org}/{name}'
         return None
 
 

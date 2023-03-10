@@ -1,7 +1,9 @@
 import os
 import uvicorn as uvicorn
-from starlette.responses import RedirectResponse
+
 from fastapi import FastAPI, HTTPException, Depends, Response, status
+
+
 from celery.result import AsyncResult
 from dotenv import dotenv_values
 
@@ -33,16 +35,19 @@ CONFIG = {
 
 library = CadLibrary('./scriptlibrary')
 scripts = library.scripts
-api_generator = ApiGenerator(library, no_workers=(True if CONFIG.get('LOCAL_DEBUG_MODE' ) == '1' else False))
+no_workers = CONFIG.get('LOCAL_DEBUG_MODE' ) == '1' or (CONFIG.get('OCCI_CADQUERY') == '0' and CONFIG.get('OCCI_ARCHIYOU') == '0')
+api_generator = ApiGenerator(library, no_workers=no_workers)
 
 #### CHECK CONNECTION TO RMQ ####
 
-if CONFIG.get('LOCAL_DEBUG_MODE' ) != '1' and api_generator.request_handler.check_celery() is False:
+if not no_workers and api_generator.request_handler.check_celery() is False:
     raise Exception('*** RESTART API - No Celery connection and/or missing workers: Restart API ****') 
 
 app = FastAPI(openapi_tags=api_generator.get_api_tags(scripts))
 api_generator.generate_endpoints(api=app, scripts=scripts)
-admin = Admin(app, api_generator)
+
+admin = Admin(app, api_generator, passphrase=CONFIG.get('OCCI_ADMIN_PASSPHRASE'))
+
 
 @app.get("/")
 async def index():

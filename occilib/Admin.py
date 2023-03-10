@@ -20,11 +20,18 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
 from pydantic import BaseModel
+
+import secrets
+import string
 
 from .CadScript import CadScript
 from .ApiGenerator import ApiGenerator
+
+security = HTTPBasic()
 
 #### ADMIN MODELS ####
 
@@ -54,12 +61,15 @@ class Admin:
     SCRIPT_ORG_MIN_CHARS = 4
     SCRIPT_NAME_MIN_CHARS = 4
     SCRIPT_CODE_MIN_CHARS = 10
+    SECURITY_ADMIN_USERNAME = 'admin'
 
     #### END SETTINGS ####
 
     api:FastAPI = None # reference to FastAPI app instance
+    api_generator:ApiGenerator = None
+    passphrase:str # strong passphase to protect admin enpoints
 
-    def __init__(self, api:FastAPI=None, api_generator:ApiGenerator=None):
+    def __init__(self, api:FastAPI=None, api_generator:ApiGenerator=None, passphrase:str=None):
 
         self._setup_logger()
 
@@ -69,6 +79,12 @@ class Admin:
             self.logger.error('Please supply a reference to OCCI ApiGenerator!')
         else:
             self.api = api
+            self.api_generator = api_generator
+
+            self.passphrase = passphrase if passphrase is not None else self._generate_passphrase()
+            if passphrase is None:
+                self.logger.warn('**** IMPORTANT: PLEASE SUPPLY A STRONG PASSPHRASE. NOW WE GENERATED ONE:\n{self.passpharse}\n[Use this with user "admin" to access the endpoints]')
+                
             self._add_admin_endpoints()
 
         
@@ -80,17 +96,30 @@ class Admin:
             api = self.api
             # /admin/publish
             @api.post('/admin/publish')
-            async def publish(req:PublishRequest):
+            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 self._handle_publish_request(req)
                 return req
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
-            async def get_pub_job(job_id:int):
+            async def get_pub_job(job_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 return job_id
             # /admin/unpublish
             @api.post('/admin/unpublish/{script_id:int}')
-            async def unpublish(script_id:int):
+            async def unpublish(script_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 return script_id
+            
+    def _validate_credentials(self, credentials: HTTPBasicCredentials = Depends(security)) -> bool:
+
+        r = secrets.compare_digest(credentials.username.encode("utf8"), self.SECURITY_ADMIN_USERNAME.encode('utf8')) \
+                and secrets.compare_digest(credentials.password.encode("utf8"), self.passphrase.encode('utf8'))
+        if not r:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect usernamd and password",
+                headers={"WWW-Authenticate": "Basic"},
+            )
+
+        return credentials
     
     def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
         """ 
@@ -103,8 +132,9 @@ class Admin:
 
         """
 
-        if self._check_publish_request(req):
-            pass
+        self._check_publish_request(req)
+
+        return 'BLA'
         
 
 
@@ -122,9 +152,6 @@ class Admin:
             raise HTTPException(status_code=400, detail=f'The "name" field of your script is too short. Minimum is {self.SCRIPT_NAME_MIN_CHARS}')
         if req.script.code is None or len(req.script.code) < self.SCRIPT_CODE_MIN_CHARS:
             raise HTTPException(status_code=400, detail=f'Your script contains no field "code" or too little code. Is this a real model? Minimum is {self.SCRIPT_CODE_MIN_CHARS}')
-        
-        # fill in some data
-        req.script.namespace = req.script.get_namespace()
         
         return True
 
@@ -149,3 +176,7 @@ class Admin:
 
         except Exception as e:
             self.logger.error(e)
+
+    def _generate_passphrase(self, chars=20) -> str:
+        
+        return ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(chars))
