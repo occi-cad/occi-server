@@ -97,12 +97,13 @@ class Admin:
             # /admin/publish
             @api.post('/admin/publish')
             async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
-                self._handle_publish_request(req)
-                return req
+                return self._handle_publish_request(req)
+            
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
             async def get_pub_job(job_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 return job_id
+            
             # /admin/unpublish
             @api.post('/admin/unpublish/{script_id:int}')
             async def unpublish(script_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
