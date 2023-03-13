@@ -27,6 +27,7 @@ import tempfile
 import uuid
 
 from typing import List, Dict, Any
+from collections.abc import Callable
 
 from fastapi.responses import Response, FileResponse
 from semver.version import Version
@@ -689,7 +690,7 @@ class CadLibrary:
 
         return compute_batch_id
     
-    def compute_script_cache_async(self, script:CadScript) -> str:
+    async def compute_script_cache_async(self, script:CadScript, compute_batch_id:str, on_done:Callable[[str],bool]=None) -> str:
         """
             Precalculate all variants of script asynchronously
             returns a batch_id immediately for reference later
@@ -704,14 +705,20 @@ class CadLibrary:
         
         # basic batch information to keep track of progress
         num_variants = script.get_num_variants()
-        compute_batch_id = str(uuid.uuid4())
         self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
 
         for hash,param_values in script.iterate_possible_model_params_dicts():
-            task  = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
+            # TODO: should we await the results here instead of creating the tasks concurrently - it might block the event loop
+            task = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
             # IMPORTANT: keep references otherwise GC might remove tasks. See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
             self._background_async_tasks.add(task)
             task.add_done_callback(self._background_async_tasks.discard) # auto remove reference after completion
+            await task # this is needed to capture every result sequentially
+
+        # after all tasks are done
+        # TODO: do we still need to check end of batch in task done handler?
+        if on_done and callable(on_done):
+            on_done(compute_batch_id)
 
         return compute_batch_id
 

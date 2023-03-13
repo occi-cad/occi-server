@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime
 from typing import Dict
 from enum import Enum
+import asyncio
 
 
 from fastapi import FastAPI, HTTPException, Depends, status
@@ -101,7 +102,7 @@ class Admin:
             # /admin/publish
             @api.post('/admin/publish')
             async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
-                return self._handle_publish_request(req)
+                return await self._handle_publish_request(req)
             
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
@@ -126,7 +127,7 @@ class Admin:
 
         return credentials
     
-    def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
+    async def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
         """ 
             Handles a request to publish a given script
         """
@@ -137,7 +138,12 @@ class Admin:
         if self.api_generator.library.add_script(req.script) is False:
             raise HTTPException(status_code=400, detail='Cannot publish script. It already exists. Try another name or version tag!')
         # If needed (and possible) start pre-calculation of models into cache asynchronously
-        batch_id = self.api_generator.library.compute_script_cache_async(req.script)
+        batch_id = str(uuid.uuid4())
+
+        def on_done(batch_id) -> bool:
+            self.publish_jobs[pub_job.id].status = 'success'
+
+        asyncio.create_task(self.api_generator.library.compute_script_cache_async(req.script, batch_id, on_done)) # don't await this
         # Report back to the API user about the PublishJob
         pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
         self.publish_jobs[pub_job.id] = pub_job
