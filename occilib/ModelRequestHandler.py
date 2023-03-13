@@ -110,7 +110,7 @@ class ModelRequestHandler():
             
             # test CQ connection through Celery queues
             cq_flag = os.environ.get(self.CAD_SCRIPT_ENGINES['cadquery'])
-            if cq_flag:
+            if cq_flag == '1':
                 for worker_host, worker_queue_info in self.celery.control.inspect().active_queues().items():
                     queue_name = worker_queue_info[0].get('name') if len(worker_queue_info) > 0 else None
                     if queue_name:
@@ -136,7 +136,7 @@ class ModelRequestHandler():
 
     def test_archiyou_worker(self) -> bool:
 
-        from celery_tasks import compute_job_archiyou # dynamic import because celery_tasks need to be avoided in no_workers mode
+        from .celery_tasks import compute_job_archiyou # dynamic import because celery_tasks need to be avoided in no_workers mode
 
         try:
             result = compute_job_archiyou.apply_async(args=[], kwargs={ 'script' : None })
@@ -148,7 +148,7 @@ class ModelRequestHandler():
 
     def get_celery_task_method(self, requested_script:CadScriptRequest) -> Any: # TODO: nice typing
 
-        from celery_tasks import compute_job_archiyou, compute_job_cadquery # dynamic import because celery_tasks need to be avoided in no_workers mode
+        from .celery_tasks import compute_job_archiyou, compute_job_cadquery # dynamic import because celery_tasks need to be avoided in no_workers mode
 
         TASK_METHODS_BY_ENGINE = {
             'cadquery' : compute_job_cadquery, 
@@ -156,21 +156,20 @@ class ModelRequestHandler():
         }
         DEFAULT_ENGINE = 'cadquery'
 
-        task_method = TASK_METHODS_BY_ENGINE.get(requested_script.script_cad_language)
+        task_method = TASK_METHODS_BY_ENGINE.get(requested_script.cad_engine)
         if task_method is None:
-            self.logger.error(f'ModelRequestHandler::get_celery_task_method: Cannot get Celery task method: script_cad_language "{requested_script.script_cad_language}" is unknown! Defaulted to "cadquery"')
+            self.logger.error(f'ModelRequestHandler::get_celery_task_method: Cannot get Celery task method: cad_engine "{requested_script.cad_engine}" is unknown! Defaulted to "cadquery"')
             task_method = TASK_METHODS_BY_ENGINE[DEFAULT_ENGINE]
         
         return task_method
 
     def script_engine_has_workers(self, requested_script:CadScriptRequest) -> bool:
 
-        return requested_script.script_cad_language in self.available_scriptengine_workers
+        return requested_script.cad_engine in self.available_scriptengine_workers
 
 
     def handle_script_result(self, script_result:CadScriptResult) -> Response|FileResponse:
         # we got a compute result in time to respond directly to the API client
-
         if script_result:
             if script_result.results.success is True:
                 return self.library.checkin_script_result_in_cache_and_return(script_result)
@@ -242,7 +241,7 @@ class ModelRequestHandler():
                 if self.celery_connected:
                     
                     if self.script_engine_has_workers(requested_script) is False:
-                        raise HTTPException(500, detail=f'No workers available for cad script engine "{requested_script.script_cad_language}". Try again or report to the administrator!') # raise http exception to give server error
+                        raise HTTPException(500, detail=f'No workers available for cad script engine "{requested_script.cad_engine}". Try again or report to the administrator!') # raise http exception to give server error
 
                     task:AsyncResult = self.get_celery_task_method(requested_script).apply_async(args=[], kwargs={ 'script' : requested_script.json() })
                     result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)

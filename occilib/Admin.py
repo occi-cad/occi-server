@@ -18,7 +18,9 @@
 import logging
 import uuid
 from datetime import datetime
+from typing import Dict
 from enum import Enum
+
 
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -30,6 +32,7 @@ import string
 
 from .CadScript import CadScript
 from .ApiGenerator import ApiGenerator
+from .models import ComputeBatchStats
 
 security = HTTPBasic()
 
@@ -39,18 +42,18 @@ class PublishRequest(BaseModel):
     pre_calculate:bool=False # request a pre-compute of all models
     script:CadScript=None # the script you want to publish
 
-class JobStatus(str,Enum):
+class PublishJobStatus(str,Enum):
     success = 'success'
+    computing = 'computing'
     error = 'error'
 
 class PublishJob(BaseModel):
-    id:str = uuid.uuid4()
+    id:str = str(uuid.uuid4())
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
     script:CadScript
-    status:JobStatus = None
-    pre_calculated:int = 0
-    pre_calculation_total:int = None
+    status:PublishJobStatus = None
+    stats:ComputeBatchStats = None
 
 
 #### ADMIN CLASS ####
@@ -68,6 +71,7 @@ class Admin:
     api:FastAPI = None # reference to FastAPI app instance
     api_generator:ApiGenerator = None
     passphrase:str # strong passphase to protect admin enpoints
+    publish_jobs:Dict[str, PublishJob] = {} # keep track of publish jobs and there stats
 
     def __init__(self, api:FastAPI=None, api_generator:ApiGenerator=None, passphrase:str=None):
 
@@ -96,13 +100,13 @@ class Admin:
             api = self.api
             # /admin/publish
             @api.post('/admin/publish')
-            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
+            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
                 return self._handle_publish_request(req)
             
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
-            async def get_pub_job(job_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
-                return job_id
+            async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
+                return self._get_publish_job(job_id)
             
             # /admin/unpublish
             @api.post('/admin/unpublish/{script_id:int}')
@@ -125,19 +129,32 @@ class Admin:
     def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
         """ 
             Handles a request to publish a given script
-
-            1. Do the needed checks around unique namespaces
-            2. Save the script in OCCI library on disk
-            3. Report back to the API user about the PublishJob
-            4. If needed (and possible) start pre-calculation of models into cache
-
         """
 
-        self._check_publish_request(req)
-
-        return 'BLA'
+        # Do the needed checks around unique namespaces
+        self._check_publish_request(req) # will raise Error
+        # Save the script in OCCI library on disk
+        if self.api_generator.library.add_script(req.script) is False:
+            raise HTTPException(status_code=400, detail='Cannot publish script. It already exists. Try another name or version tag!')
+        # If needed (and possible) start pre-calculation of models into cache asynchronously
+        batch_id = self.api_generator.library.compute_script_cache_async(req.script)
+        # Report back to the API user about the PublishJob
+        pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
+        self.publish_jobs[pub_job.id] = pub_job
+        return pub_job
+    
+    def _get_publish_job(self, id:str) -> PublishJob:
+        """
+            Get the state of the publish job
+            !!!! TODO: We need to centralize job info in redis if we want to use multiple API instances
+        """
+        pub_job = self.publish_jobs.get(id)
+        if pub_job:
+            pub_job.stats = self.api_generator.library._compute_batch_stats.get(id)
+            return pub_job
         
-
+        raise HTTPException(status_code=404, detail=f'Cannot find publish job widh id "{id}"!')
+        
 
     def _check_publish_request(self, req:PublishRequest) -> bool: # or None if everything checks out
 

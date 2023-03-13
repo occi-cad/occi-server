@@ -29,7 +29,7 @@ class CadLibrarySearch:
 
     #### SETTINGS ####
     SEARCH_INDEX_DIRNAME = 'library_index'
-    SEARCHABLE_FIELDS = ['name', 'author', 'org', 'description', 'units', 'code', 'script_cad_language']
+    SEARCHABLE_FIELDS = ['name', 'author', 'org', 'description', 'units', 'code', 'cad_engine']
 
     library = None
     parser:MultifieldParser = None

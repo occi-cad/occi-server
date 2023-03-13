@@ -27,7 +27,6 @@ class ParamConfigBase(BaseModel):
     name:str = None # can be later set from Dict
     label:str = None # optional: Clean name for name of parameter in configurator (Not yet supported in FreeCad plugin)
     type:ParamType = None # type of Param like int, float, string
-    public_code:bool = True # disable source code being visible
     default:Any = None # default value
     description:str = None
     units:ModelUnits = None
@@ -68,7 +67,7 @@ class ParamConfigOptions(ParamConfigBase):
         A options Param which offers a list of strings for the user to choose from
     """
     type:ParamType = 'options'
-    options:List[str]
+    options:List[str] = []
     iterable = True
     
     def values(self) -> List[str]:

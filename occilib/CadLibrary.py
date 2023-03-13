@@ -34,6 +34,7 @@ from semver.version import Version
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
 from .Param import ParamConfigNumber, ParamConfigText, ParamConfigOptions, ParamConfigBoolean
+from .models import ComputeBatchStats
 
 from dotenv import dotenv_values
 CONFIG = dotenv_values()
@@ -58,8 +59,8 @@ class CadLibrary:
     
     dirs_by_script_name:Dict[str,str] = {}
 
-    _compute_batch_counters = {} # { uuid1: 13, uuid2: 12 } 
-    _compute_batch_totals = {} # total number of tasks in batch { uuid1: 200 } 
+    _compute_batch_stats:Dict[str,ComputeBatchStats] = {} # by uuid - IMPORTANT: this data needs to be centralized (in Redis for example) when we want multiple API instances
+    _background_async_tasks = set() # Needed to keep references to tasks that might be otherwise deleted by carbage collection
 
     def __init__(self, rel_path:str=DEFAULT_PATH):
         """
@@ -155,7 +156,7 @@ class CadLibrary:
         for script_config in script_config_dicts:
             self._set_params_keys_to_names(script_config) 
             base_script = CadScript(**script_config)
-            base_script = self._upgrade_params(base_script, script_config)
+            # base_script = self._upgrade_params(base_script, script_config) # TODO: remove
             self.scripts.append(base_script)
 
         self.source = 'file' # set flag so we now the scripts came from a file
@@ -242,7 +243,7 @@ class CadLibrary:
 
                 # try getting extra info from path
                 base_script.code = self._get_code_from_script_path(script_path)
-                base_script.script_cad_language = self._get_code_cad_language(script_path)
+                base_script.cad_engine = self._get_code_cad_language(script_path)
                 base_script.created_at = self._get_script_created_at(script_path)
                 base_script.updated_at = self._get_script_updated_at(script_path)
 
@@ -301,7 +302,7 @@ class CadLibrary:
                     chosen_script_org = script_config.get('org') or script_dir_org
                     chosen_script_name = script_config.get('name') or script_dir_name or script_name
                     base_script = CadScript(**{ 'name': chosen_script_name, 'org' : chosen_script_org } | script_config) # CadScript needs a name and org
-                    base_script = self._upgrade_params(base_script, script_config)
+                    #base_script = self._upgrade_params(base_script, script_config) # TODO: remove 
                 
             elif script_config_file_ext == '.yaml' or script_config_file_ext == '.yml':
                 self.logger.warn('CadLibrary::_parse_config(): YML config files not implemented yet!')
@@ -385,7 +386,7 @@ class CadLibrary:
             Get the result.json in the cache
         """
 
-        cached_script_model_dir = self._get_script_cached_model_dir(script)
+        cached_script_model_dir = self._get_script_version_cached_model_dir(script)
         cached_script_model_file = f'{cached_script_model_dir}/result.json'
         return cached_script_model_file if Path(cached_script_model_file).is_file() else None
 
@@ -417,7 +418,7 @@ class CadLibrary:
             'stl' : 'binary'
         }
 
-        cached_script_dir = self._get_script_cached_model_dir(script)
+        cached_script_dir = self._get_script_version_cached_model_dir(script)
         cached_model_path = f'{cached_script_dir}/result.{script.request.format}'
 
         if os.path.exists(cached_model_path) is False:
@@ -459,7 +460,7 @@ class CadLibrary:
             self.logger.error('CadLibrary::set_script_model_is_computing(): Please supply a script instance with a .request!')
             return False
 
-        script_request_dir_path = self._get_script_cached_model_dir(script)
+        script_request_dir_path = self._get_script_version_cached_model_dir(script)
         Path(script_request_dir_path).mkdir(parents=True, exist_ok=True) # check and make needed dirs if not exist
         # to avoid all kinds of problems clear the directory before writing the task file
         self._clear_dir(script_request_dir_path)
@@ -474,7 +475,7 @@ class CadLibrary:
             Check if a specific script model request is computing
             Return ModelComputeJob with among others task_id or None
         """
-        script_request_dir = f'{self._get_script_cache_dir(script_name)}/{script_instance_hash}'
+        script_request_dir = f'{self._get_script_version_cache_dir(script_name)}/{script_instance_hash}'
 
         if os.path.exists(script_request_dir):
             files = os.listdir(script_request_dir)
@@ -506,26 +507,27 @@ class CadLibrary:
         
     def remove_script_model_is_computing_job(self, script:CadScriptResult|CadScriptRequest) -> bool:
 
-        script_request_dir = f'{self._get_script_cache_dir(script.name)}/{script.hash()}'
+        script_request_dir = f'{self._get_script_version_cache_dir(script)}{os.sep}{script.hash()}'
         
         if os.path.exists(script_request_dir):
             self.remove_compute_files(dir=script_request_dir)
-
-
-    def _get_script_cached_model_dir(self, script:CadScriptRequest) -> str:
-            
-            return f'{self._get_script_cache_dir(script.name)}/{script.hash()}'
     
-    def _get_script_cache_dir(self, script_name:str) -> str:
-        #  {library_path}/{component}/{component}-cache
-        script_dir_path = self._get_script_filedir_path(script_name)
-        return f'{script_dir_path}/{script_name}-cache'
+    def _get_script_version_dir(self, script:CadScript) -> str:
+        # {library_path}/{org}/{scriptname}/{version}/{scriptname}-cache
+        return os.path.join(os.path.realpath(self.path), script.org, script.name, script.version)
+    
+    def _get_script_version_cache_dir(self, script:CadScript) -> str:
+        #  {library_path}/{org}/{scriptname}/{version}/{scriptname}-cache
+        script_dir_path = self._get_script_version_dir(script)
+        return f'{script_dir_path}{os.sep}{script.name}-cache'
 
-    def _get_script_filedir_path(self, script_name:str) -> str:
-        if self.source == 'file':
-            return os.path.join(os.path.realpath(self.path), script_name)
-        else:
-            return self.dirs_by_script_name.get(script_name)
+    def _get_script_version_cached_model_dir(self, script:CadScriptRequest) -> str:
+            # {library_path}/{org}/{scriptname}/{version}/{scriptname}-cache/{hash}
+            hash = script.hash()
+            if not hash:
+                self.logger.error('_get_script_version_cached_model_dir: CadScript has no request and no hash!')
+                return None
+            return f'{self._get_script_version_cache_dir(script)}{os.sep}{hash}'
     
     def _clear_dir(self, dir_path) -> bool:
         for path in Path(dir_path).glob("**/*"):
@@ -549,7 +551,7 @@ class CadLibrary:
         script_result_json = script_result.json()
 
         # cache if cachable
-        result_cache_dir = f'{self._get_script_cache_dir(script_result.name)}/{script_result.request.hash}'
+        result_cache_dir = f'{self._get_script_version_cached_model_dir(script_result)}'
 
         if script_result.is_cachable():
             # place total JSON response in cache
@@ -571,7 +573,7 @@ class CadLibrary:
                         gltf_binary = base64.b64decode(script_result.results.models['gltf']) # decode base64
                         f.write(gltf_binary)
 
-                #self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model variant cached in directory: {result_cache_dir} [{batch_count_str}]')
+                self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model variant cached in directory: {result_cache_dir}')
             else:
                 self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
 
@@ -581,9 +583,10 @@ class CadLibrary:
         # only allow requested format to be outputted
         script_result = self._apply_single_model_format(script_result)
 
-        # manage batch counters
+        # manage batch stats
         if script_result.request.batch_id is not None:
-            self._compute_batch_counters[script_result.request.batch_id] += 1 # increment
+            self._compute_batch_stats[script_result.request.batch_id].done += 1 # increment
+            self._compute_batch_stats[script_result.request.batch_id].duration += script_result.results.duration # increment duration in ms
 
         # Depending on request.format and request.output return either full json or file
         if script_result.request.output == 'full':
@@ -625,25 +628,27 @@ class CadLibrary:
         self.checkin_script_result_in_cache_and_return(script_result)
 
         batch_id = script_result.request.batch_id
-        batch_count = self._compute_batch_counters[batch_id] if batch_id else None
-        batch_total = self._compute_batch_totals[batch_id] if batch_id else None
-        batch_count_str = f'Batch count: {batch_count}/{batch_total}' if batch_id is not None else ''
+
+        # some stats for readout
+        batch_tasks_total = self._compute_batch_stats[batch_id].tasks if batch_id else None
+        batch_tasks_done = self._compute_batch_stats[batch_id].done if batch_id else None
+        batch_count_str = f'Batch count: {batch_tasks_done}/{batch_tasks_total}' if batch_id is not None else ''
         self.logger.info(f'CadLibrary::_submit_compute_script_task(): Script "{script_result.name}": model "{script_result.request.hash}" submitted and handled. Took: {script_result.results.duration} ms. {batch_count_str}')
 
         # detect end of batch
-        if batch_id and (batch_count == batch_total):
-            self.logger.info(f'==== END OF BATCH "{batch_id}" ====')
-            del self._compute_batch_counters[batch_id]
-            del self._compute_batch_totals[batch_id]
-            # do something more later
+        if batch_id and (batch_tasks_done == batch_tasks_total):
+            self.logger.info(f'==== END OF BATCH "{batch_id}" TOOK {self._compute_batch_stats[batch_id].duration/1000}s ====')
+            # del self._compute_batch_stats[batch_id] # TODO: make something smarter: delete after timeout
+            # TODO: do something more later
             
 
 
         return script_result
 
-    def compute_script_cache(self, org:str, name:str) -> bool:
+    def compute_script_cache(self, org:str, name:str) -> str:
         '''
-            Given a script org and name compute its cache
+            Given a script org and name compute its cache synchronously 
+            If started compute return batch_id
         '''
         
         from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
@@ -652,17 +657,22 @@ class CadLibrary:
         script = self.get_script_request(org, name)
         if script is None:
             self.logger.error(f'CadLibrary::compute_script_cache: Can not get script with org="{org}" and name="{name}"')
-            return False
+            return None
         
         if not script.is_cachable():
             self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
-            return False
+            return None
 
-        # setup batch info
+        # basic batch information to keep track of progress
         num_variants = script.get_num_variants()
         compute_batch_id = str(uuid.uuid4())
-        self._compute_batch_counters[compute_batch_id] = 0
-        self._compute_batch_totals[compute_batch_id] = num_variants
+
+        # IMPORTANT: currently the tasks of a cache batch are saved centrally in the main API instance
+        # This might not scale very well with multiple API instances (like is normal with FastAPI/uvicorn in production)
+        # The API instances do maintain a link with the task by waiting for it asynchronously 
+        # But requests from API user might come at any API instance
+        # TODO: use redis to save stats on different compute jobs?
+        self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
 
         self.logger.info(f'==== START COMPUTE CACHE FOR SCRIPT "{script.name}" with {num_variants} model variants ====')
         
@@ -677,10 +687,37 @@ class CadLibrary:
         loop.run_until_complete(tasks) # results are already handled
         loop.close()
 
+        return compute_batch_id
+    
+    def compute_script_cache_async(self, script:CadScript) -> str:
+        """
+            Precalculate all variants of script asynchronously
+            returns a batch_id immediately for reference later
+        """
+
+        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
+        self.request_handler = ModelRequestHandler(library=self)
+        
+        if not script.is_cachable():
+            self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
+            return None
+        
+        # basic batch information to keep track of progress
+        num_variants = script.get_num_variants()
+        compute_batch_id = str(uuid.uuid4())
+        self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
+
+        for hash,param_values in script.iterate_possible_model_params_dicts():
+            task  = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
+            # IMPORTANT: keep references otherwise GC might remove tasks. See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
+            self._background_async_tasks.add(task)
+            task.add_done_callback(self._background_async_tasks.discard) # auto remove reference after completion
+
+        return compute_batch_id
 
     def compute_cache(self):
         """
-            Compute and cache all results of cachable scripts in this library
+            Compute and cache synchronously  all results of cachable scripts in this library
             NOTE: Cache management is centralized: We don't allow workers to write to cache!
         """
 
@@ -716,10 +753,7 @@ class CadLibrary:
         return script_request
 
 
-    def compute_cache_async(self):
-
-        # TODO: for use when API starts
-        pass
+    
 
     #### SEARCH ####
 
@@ -742,7 +776,7 @@ class CadLibrary:
     def write_script(self, script:CadScript) -> bool:
         """
             Write script onto disk storage of Library
-            NOTE: will overwrite
+            NOTE: will overwrite existing
         """
 
         SCRIPT_LANGUAGE_TO_SCRIPT_EXT = {
@@ -756,7 +790,7 @@ class CadLibrary:
 
         script_dir = self.script_to_library_path(script)
         Path(script_dir).mkdir(parents=True, exist_ok=True) # make directory if not exists
-        ext = SCRIPT_LANGUAGE_TO_SCRIPT_EXT.get(script.script_cad_language) or 'py' # default is py
+        ext = SCRIPT_LANGUAGE_TO_SCRIPT_EXT.get(script.cad_engine) or 'py' # default is py
         script_filepath = f'{script_dir}{os.sep}{script.name}.{ext}'
         config_filepath = f'{script_dir}{os.sep}{script.name}.json'
         
@@ -835,7 +869,7 @@ class CadLibrary:
         self.logger.info('**** OCCI COMPONENTS LIBRARY LOADED ****')
         self.logger.info(f'Scripts: {len(self.latest_scripts)}')
         for name, script in self.latest_scripts.items():
-            self.logger.info(f'- "{script.namespace}" {self.script_versions[script.namespace]}[{script.script_cad_language}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
+            self.logger.info(f'- "{script.namespace}" {self.script_versions[script.namespace]}[{script.cad_engine}] - path: "{self.dirs_by_script_name[script.name]}/", lines of code: {self._get_lines_of_code(script.code)}, params: {len(script.params.keys())}, author:"{script.author}", org:"{script.org}"')
         self.logger.info('********')
 
     def _get_lines_of_code(self,code:str) -> int:

@@ -46,7 +46,7 @@ def compute_job_cadquery(self,script:str): # json of CadScript
         - capture Exception and add to script.result.errors
         
     '''
-    if script_result.script_cad_language == 'cadquery':
+    if script_result.cad_engine == 'cadquery':
         param_values = script_result.get_param_values_dict()
         build_result = cqgi.parse(script_result.code).build(build_parameters=param_values, build_options={} )
         # See docs for BuiltResult: https://github.com/CadQuery/cadquery/blob/master/cadquery/cqgi.py

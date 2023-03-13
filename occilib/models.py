@@ -51,7 +51,7 @@ class ModelContentLicense(str, Enum):
     CC0 = 'CC0' # (aka CC Zero) is a public dedication tool, which allows creators to give up their copyright and put their works into the worldwide public domain. CC0 allows reusers to distribute, remix, adapt, and build upon the material in any medium or format, with no conditions.',
 
 
-class ScriptCadLanguage(str,Enum):
+class ScriptCadEngine(str,Enum):
     cadquery = 'cadquery'
     archiyou = 'archiyou'
     openscad = 'openscad' # Not yet supported
@@ -71,6 +71,11 @@ class RequestResultFormat(str,Enum):
     full ='full'
     model = 'model'
     
+class ComputeBatchStats(BaseModel):
+    tasks:int = 0 
+    done:int = 0
+    duration:int = 0 # in ms
+
 
 #### IO MODELS ####
 

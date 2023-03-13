@@ -47,4 +47,29 @@ print(lib.script_exists(CadScript(name='steelbeam', org='archiyou', version='0.5
 '''
 
 # lib.add_script(CadScript(name='steelbeam', org='archiyou', version='0.5')) # error
-lib.add_script(CadScript(name='testscript', org='testorg', code='b = box();', script_cad_language='archiyou'), overwrite=True)
+#lib.add_script(CadScript(name='testscript', org='testorg', code='b = box();', cad_engine='archiyou'), overwrite=True)
+
+#### TEST VALIDATION AND UPGRADE OF PARAMS ####
+"""
+script = CadScript(**{
+		 "name" : "pubtest",
+		 "org" : "archiyou",
+		 "version" : "1.2",
+		 "cad_engine" : "archiyou",
+		 "code": "b = box($SIZE);",
+		 "params" : {
+					"SIZE" : { "type" : "number", "start" : 1, "end" : 1000, "step" : 1, "default" : 5 }
+		 }
+	 })
+
+print(script) # params should not be ParamConfigBase
+"""
+
+#### TEST SCRIPT DIRS ####
+'''
+script=CadScript(**{ "name" : "pubtest", "org" : "archiyou", "version" : "1.2", "cad_engine" : "archiyou", "code": "b = box($SIZE);", "params" : { "SIZE" : { "type" : "number", "start" : 1, "end" : 10, "step" : 1, "default" : 5 } }})
+print(lib._get_script_version_dir(script))
+print(lib._get_script_version_cache_dir(script))
+print(lib._get_script_version_cached_model_dir(script))
+'''   
+

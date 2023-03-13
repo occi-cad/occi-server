@@ -15,7 +15,7 @@ import base64
 import json
 import itertools
 
-from .models import ScriptCadLanguage, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
+from .models import ScriptCadEngine, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions, ParamInstance
 
 
@@ -73,9 +73,9 @@ class CadScript(BaseModel):
     param_presets:Dict[str, dict] = {} # TODO: presets of parameters by name and then a { param_name: value } dict
     public_code: bool = False # if public user of the API can see the source code of the CAD script
     code: str  = None# the code of the CAD script
-    script_cad_language:ScriptCadLanguage = 'cadquery' # cadquery, archiyou or openscad (and many more may follow)
-    script_cad_version:str = None # not used currently
-    script_cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
+    cad_engine:ScriptCadEngine = 'cadquery' # cadquery, archiyou or openscad (and many more may follow)
+    cad_engine_version:str = None # not used currently
+    cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
 
     #### INPUT VALIDATATORS ####
@@ -87,6 +87,24 @@ class CadScript(BaseModel):
     def set_namespace(cls, value, values):
         # always generate namespace from name and org
         return cls.get_namespace(None,**values) # this is somewhat hacky: cls is not an instance!
+    
+    @validator('params', pre=True)
+    def upgrade_params(cls, value, values):
+        """
+            This upgrades a param before Pydantic parses it as ParamConfigBase
+        """
+        TYPE_TO_PARAM_CLASS = {
+            'number' : ParamConfigNumber,
+            'text' : ParamConfigText,
+            'boolean' : ParamConfigBoolean,
+            'options' : ParamConfigOptions,
+        }
+        new_params:Dict[str,ParamConfigNumber|ParamConfigText|ParamConfigBoolean|ParamConfigOptions] = {}
+        for name, param_dict in value.items():
+            ParamClass = TYPE_TO_PARAM_CLASS.get(param_dict['type'])
+            new_params[name] = ParamClass(**(param_dict | { 'name' : name })) # also add param name coming from dict key
+
+        return new_params
     
     #### CLASS METHODS ####
     def get_namespace(self, org:str=None, name:str=None, **kwargs) -> str:
@@ -100,7 +118,6 @@ class CadScript(BaseModel):
             return f'{org}/{name}'
         return None
 
-
     def hash(self, params: Dict[str, ParamInstance]=None) -> str:
         """
             Hash a given dict of ParamInstance parameters. 
@@ -109,11 +126,7 @@ class CadScript(BaseModel):
         
         # if params is not given we try to get is from the script.request
         if params is None:
-            if not hasattr(self, 'request'):
-                self.logger.error('CadScript::hash(): Cannot get script hash because it has no request with parameter values yet!')
-                return None
-            if self.request is None:
-                self.logger.error('CadLibrary::hash(script): This CadScript is not an instance. We need request attribute too!')
+            if not hasattr(self, 'request') or self.request is None:                
                 return None
 
             params = self.request.params
