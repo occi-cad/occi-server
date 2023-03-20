@@ -227,7 +227,8 @@ class CadLibrary:
         else:
             script_path_values = match.groupdict()
 
-            if Version.isvalid(script_path_values['version']):
+            # TODO: parse and allow minor versions
+            if Version.is_valid(script_path_values['version']):
                 self.logger.error(f'CadLibrary::_script_path_to_script(): Script at path "{script_path}" has invalid semversion. Skipped! Please check!')
                 return None
             else:
