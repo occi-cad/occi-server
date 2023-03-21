@@ -56,7 +56,8 @@ class CadScript(BaseModel):
     """
     id:str = None # unique id for this script {org}/{name}/{version}
     org:str
-    name:str # always lowercase
+    name:str # unique name within namespace (always lowercase)
+    title:str = None # public title (can have all kinds of characters)
     namespace:str = None # unique endpoint namespace {org}/{name}
     author:str = None
     license:ModelContentLicense = None
