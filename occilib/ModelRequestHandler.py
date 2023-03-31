@@ -193,8 +193,7 @@ class ModelRequestHandler():
 
         """
 
-        print('==== REQUEST ====')
-        print(req)
+        self.logger.info(req)
 
         if req is None or not isinstance(req, ModelRequestInput):
             m = 'ModelRequestHandler::handle(script): No request received'
@@ -221,15 +220,11 @@ class ModelRequestHandler():
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
 
-        print(requested_script)
-
         if self.library.is_cached(requested_script):
             self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] at ****')
             # API user requested a full CadScriptResult response
             if requested_script.request.output == 'full':
                 cached_script = self.library.get_cached_script(requested_script)
-                print('=== CACHED SCRIPT')
-                print(cached_script)
                 return cached_script
             else:
                 # only a specific format model as output (we skip loading the result.json and serve the model file directly)
@@ -237,7 +232,6 @@ class ModelRequestHandler():
 
         else:
             # no cache - but already computing?
-            self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
 
             computing_job = self.library.check_script_model_computing_job(script=requested_script, script_instance_hash=requested_script.hash())
             if computing_job is not None:

@@ -126,8 +126,6 @@ class CadLibrary:
             self.logger.error(f'CadLibrary:get_script_request(org, name, version): Could not find script with org "{org}", name "{name}" and version "{version}" [optional] in library!')
             return None
         
-        self.logger.info(script)
-        
         script_request = CadScriptRequest(**dict(script)) # upgrade CadScript instance to CadScriptRequest for direct use by ModelRequestHandler
         script_request.request.created_at = datetime.now() # we need to refresh created_at (the original request ismade when the script is loaded)
 

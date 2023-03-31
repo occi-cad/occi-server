@@ -54,34 +54,31 @@ class ApiGenerator:
         self.scripts = scripts
 
         # generate endpoints per script model
-
         if scripts:
             for script in scripts:
-                self._generate_endpoint(script)
+                self._generate_version_endpoint(script)
+            for latest_script in self.library.latest_scripts.values():
+                self._generate_default_version_endpoint(latest_script)
 
 
-    def _generate_endpoint(self,script:dict):
+
+    def _generate_default_version_endpoint(self, script:dict):
+        '''
+            We use the latest script versions to generate the default endpoints
+        '''
+
+        SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
 
         api = self.api
 
-        # we generate specific input models that handle param names: bracket?width=10
-        SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
-        
-        # GET
+        # GET - last script version
+        # TODO: is this needed even since this endpoint is forwarded to the latest versions
         @api.get(f'/{script.org}/{script.name}', tags=[script.name])
         async def get_model_get(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
             req.script_org = script.org
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
         
-        @api.get(f'/{script.org}/{script.name}/{{version}}', tags=[script.name])
-        async def get_model_get_version(version:str, req:SpecificEndpointInputModel=Depends()): 
-            req.script_org = script.org
-            req.script_name = script.name
-            req.script_version = version
-            print(req)
-            return await self.request_handler.handle(req)
-
         @api.get(f'/{script.org}/{script.name}/versions', tags=[script.name]) # IMPORTANT: this route needs to be before '/{script.name}/{{version}}'
         async def get_model_get_versions(req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
@@ -89,20 +86,40 @@ class ApiGenerator:
             req.script_special_requested_entity = 'versions'
             return await self.request_handler.handle(req)
 
-    
-        @api.get(f'/{script.org}/{script.name}/{{version}}/params', tags=[script.name])
-        async def get_model_get_params(version:str, req:SpecificEndpointInputModel=Depends()):
+
+    def _generate_version_endpoint(self,script:dict):
+        '''
+            We generate specific endpoints for all script versions. 
+            IMPORTANT: every script needs a different InputModel (because it might have different params)
+            TODO: Test this for performance with a lot of scripts
+        '''
+
+        # we generate specific input models that handle param names: bracket?width=10
+        SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
+        
+        api = self.api
+
+        @api.get(f'/{script.org}/{script.name}/{script.version}', tags=[script.name])
+        async def get_model_get_version(req:SpecificEndpointInputModel=Depends()): 
             req.script_org = script.org
             req.script_name = script.name
-            req.script_version = version
+            req.script_version = script.version
+            
+            return await self.request_handler.handle(req)
+    
+        @api.get(f'/{script.org}/{script.name}/{script.version}/params', tags=[script.name])
+        async def get_model_get_params(req:SpecificEndpointInputModel=Depends()):
+            req.script_org = script.org
+            req.script_name = script.name
+            req.script_version = script.version
             req.script_special_requested_entity = 'params'
             return await self.request_handler.handle(req)
 
-        @api.get(f'/{script.org}/{script.name}/{{version}}/presets', tags=[script.name])
-        async def get_model_get_presets(version:str, req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
+        @api.get(f'/{script.org}/{script.name}/{script.version}/presets', tags=[script.name])
+        async def get_model_get_presets(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
             req.script_org = script.org
             req.script_name = script.name
-            req.script_version = version
+            req.script_version = script.version
             req.script_special_requested_entity = 'presets'
             return await self.request_handler.handle(req)
 
@@ -127,6 +144,8 @@ class ApiGenerator:
             Dynamically generate a Pydantic Input model that is used to generate API endpoint 
             It extends the Base ModelRequestInput with flat Parameters defined in the Script instance
             In the defintion of the parameter query parameters type tests and default values are applied
+
+            IMPORTANT: Every script version can have different params!
         """
 
         BASE_EXEC_REQUEST = ModelRequestInput # this is the basic model for a Script exec request
@@ -139,7 +158,7 @@ class ApiGenerator:
         
         fields = {} # dynamic pydantic field definitions
 
-        for param in script.params.values():
+        for param in script.params.values(): # get all values of params (we can do that because the Param instances have name added)
             
             field_type = PARAM_TYPE_TO_PYTHON_TYPE.get(param.type)
 
@@ -195,7 +214,7 @@ class ApiGenerator:
 
         return None
         
-    def _param_to_field_def(self, param:ParamConfigNumber|ParamConfigText): # TODO: typing
+    def _param_to_field_def(self, param:ParamConfigNumber|ParamConfigText|ParamConfigBoolean|ParamConfigOptions): # TODO: typing
         """
             Convert Param to Pydantic Field Type for dynamic parameters
             See: https://docs.pydantic.dev/usage/types
