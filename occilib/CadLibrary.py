@@ -227,11 +227,15 @@ class CadLibrary:
         else:
             script_path_values = match.groupdict()
 
-            # TODO: parse and allow minor versions
-            if Version.is_valid(script_path_values['version']):
+            # IMPORTANT: allow minor versions:
+            try:
+                parsed_script_version = Version.parse(script_path_values['version'], optional_minor_and_patch=True) 
+            except Exception as e:
                 self.logger.error(f'CadLibrary::_script_path_to_script(): Script at path "{script_path}" has invalid semversion. Skipped! Please check!')
                 return None
-            else:
+            
+            if parsed_script_version:
+
                 base_script = self._parse_config(script_path)
                 
                 base_script.org = script_path_values['org'].lower() # org is always lowercase

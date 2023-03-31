@@ -66,7 +66,7 @@ class CadScript(BaseModel):
     description:str = None 
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
-    prev_version:str = None
+    prev_version:str =  # TODO
     safe:bool = False # if validated as safe code (not implemented yet)
     published:bool = True # if available to the public
     units:ModelUnits = 'mm'
@@ -77,6 +77,7 @@ class CadScript(BaseModel):
     cad_engine:ScriptCadEngine = 'cadquery' # cadquery, archiyou or openscad (and many more may follow)
     cad_engine_version:str = None # not used currently
     cad_engine_config:dict = None # plug all kind of specific script cad engine config in here
+    secret_edit_token:str = None # TODO
     meta:dict = {} # TODO: Remove? Generate tag for FastAPI on the fly
 
     #### INPUT VALIDATATORS ####
