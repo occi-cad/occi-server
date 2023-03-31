@@ -218,11 +218,15 @@ class ModelRequestHandler():
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
 
+        print(requested_script)
+
         if self.library.is_cached(requested_script):
-            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] ****')
+            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] at ****')
             # API user requested a full CadScriptResult response
             if requested_script.request.output == 'full':
                 cached_script = self.library.get_cached_script(requested_script)
+                print('=== CACHED SCRIPT')
+                print(cached_script)
                 return cached_script
             else:
                 # only a specific format model as output (we skip loading the result.json and serve the model file directly)

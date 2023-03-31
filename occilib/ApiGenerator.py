@@ -73,24 +73,25 @@ class ApiGenerator:
             req.script_org = script.org
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
+        
+        @api.get(f'/{script.org}/{script.name}/{{version}}', tags=[script.name])
+        async def get_model_get_version(version:str, req:SpecificEndpointInputModel=Depends()): 
+            req.script_org = script.org
+            req.script_name = script.name
+            req.script_version = version
+            print(req)
+            return await self.request_handler.handle(req)
 
         @api.get(f'/{script.org}/{script.name}/versions', tags=[script.name]) # IMPORTANT: this route needs to be before '/{script.name}/{{version}}'
-        async def get_model_get_versions(req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
+        async def get_model_get_versions(req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
             req.script_name = script.name
             req.script_special_requested_entity = 'versions'
             return await self.request_handler.handle(req)
 
-        @api.get(f'/{script.org}/{script.name}/{{version}}', tags=[script.name])
-        async def get_model_get_version(version:str, req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
-            req.script_org = script.org
-            req.script_name = script.name
-            req.script_version = version
-            return await self.request_handler.handle(req)
-
     
         @api.get(f'/{script.org}/{script.name}/{{version}}/params', tags=[script.name])
-        async def get_model_get_params(version:str, req:SpecificEndpointInputModel=Depends()): # see: https://github.com/tiangolo/fastapi/issues/318
+        async def get_model_get_params(version:str, req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
             req.script_name = script.name
             req.script_version = version
