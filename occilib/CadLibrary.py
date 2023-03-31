@@ -527,8 +527,6 @@ class CadLibrary:
     
     def _get_script_version_dir(self, script:CadScript) -> str:
         # {library_path}/{org}/{scriptname}/{version}/{scriptname}-cache
-        self.logger.info('==== HIERO')
-        self.logger.info(script)
         return os.path.join(os.path.realpath(self.path), script.org, script.name, script.version)
     
     def _get_script_version_cache_dir(self, script:CadScript) -> str:
