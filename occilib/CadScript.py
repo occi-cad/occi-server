@@ -102,9 +102,15 @@ class CadScript(BaseModel):
             'options' : ParamConfigOptions,
         }
         new_params:Dict[str,ParamConfigNumber|ParamConfigText|ParamConfigBoolean|ParamConfigOptions] = {}
-        for name, param_dict in value.items():
-            ParamClass = TYPE_TO_PARAM_CLASS.get(param_dict['type'])
-            new_params[name] = ParamClass(**(param_dict | { 'name' : name })) # also add param name coming from dict key
+        
+        for name, param_dict_or_obj in value.items():
+            if type(param_dict_or_obj) is dict:
+                param_dict = param_dict_or_obj
+                # Sometimes we already have the right structure { name: ParamConfigNumber|ParamConfigText|ParamConfigBoolean|etc }
+                ParamClass = TYPE_TO_PARAM_CLASS.get(param_dict['type'])
+                new_params[name] = ParamClass(**(param_dict | { 'name' : name })) # also add param name coming from dict key
+            else:
+                new_params[name] = param_dict_or_obj
 
         return new_params
     

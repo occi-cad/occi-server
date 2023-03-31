@@ -73,3 +73,6 @@ print(lib._get_script_version_cache_dir(script))
 print(lib._get_script_version_cached_model_dir(script))
 '''   
 
+#### TEST BUG ####
+
+print (lib.get_script_request(org='mark', name='pubtest', version='2.12.0'))
