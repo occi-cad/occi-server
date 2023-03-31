@@ -478,12 +478,17 @@ class CadLibrary:
 
         return True
 
-    def check_script_model_computing_job(self, script_name:str, script_instance_hash:str) -> ModelComputeJob:
+    def check_script_model_computing_job(self, script:CadScriptRequest, script_instance_hash:str=None) -> ModelComputeJob:
         """
             Check if a specific script model request is computing
             Return ModelComputeJob with among others task_id or None
         """
-        script_request_dir = f'{self._get_script_version_cache_dir(script_name)}/{script_instance_hash}'
+
+        # When getting a job we want to supply a hash coming from the job url, otherwise use hash from script itself
+        if script_instance_hash is None:
+            script_instance_hash = script.hash()
+
+        script_request_dir = f'{self._get_script_version_cache_dir(script)}/{script_instance_hash}'
 
         if os.path.exists(script_request_dir):
             files = os.listdir(script_request_dir)
@@ -522,6 +527,8 @@ class CadLibrary:
     
     def _get_script_version_dir(self, script:CadScript) -> str:
         # {library_path}/{org}/{scriptname}/{version}/{scriptname}-cache
+        self.logger.info('==== HIERO')
+        self.logger.info(script)
         return os.path.join(os.path.realpath(self.path), script.org, script.name, script.version)
     
     def _get_script_version_cache_dir(self, script:CadScript) -> str:

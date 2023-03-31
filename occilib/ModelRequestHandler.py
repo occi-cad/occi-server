@@ -232,7 +232,7 @@ class ModelRequestHandler():
             # no cache - but already computing?
             self.logger.info(f'**** {requested_script.name}: COMPUTE ****')
 
-            computing_job = self.library.check_script_model_computing_job(requested_script.name, requested_script.hash())
+            computing_job = self.library.check_script_model_computing_job(script=requested_script, script_instance_hash=requested_script.hash())
             if computing_job is not None:
                 # refer back to compute url
                 return self.got_to_computing_job_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
@@ -358,7 +358,7 @@ class ModelRequestHandler():
         if set_compute_status:
             self.library.set_script_model_is_computing(script, task_id)
 
-        return RedirectResponse(f'/{script.org}/{script.name}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
+        return RedirectResponse(f'/{script.org}/{script.name}/{script.version}/{script.hash()}/{self.REDIRECTING_COMPUTING_STATE}/{task_id}')
 
 
     def _req_to_script_request(self,req:ModelRequestInput) -> CadScriptRequest:

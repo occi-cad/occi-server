@@ -75,4 +75,5 @@ print(lib._get_script_version_cached_model_dir(script))
 
 #### TEST BUG ####
 
-print (lib.get_script_request(org='mark', name='pubtest', version='2.12.0'))
+script = lib.get_script_request(org='mark', name='pubtest', version='2.12.0')
+lib.check_script_model_computing_job(script=script, script_instance_hash=script.hash())

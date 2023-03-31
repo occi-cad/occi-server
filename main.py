@@ -59,8 +59,8 @@ async def index():
 
 #### COMPUTING JOB STATUS ####
 
-@app.get('/{script_org}/{script_name}/{script_instance_hash}/job/{celery_task_id}')
-async def get_model_compute_task(script_name:str, script_instance_hash:str, celery_task_id:str, response: Response):
+@app.get('/{script_org}/{script_name}/{script_version}/{script_instance_hash}/job/{celery_task_id}')
+async def get_model_compute_task(script_org:str, script_name:str, script_version:str, script_instance_hash:str, celery_task_id:str, response: Response):
     """
         If a compute takes longer then a defined time (see ModelRequestHandler.WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT)
         The user is redirected to this url which supplies information on the job
@@ -75,6 +75,8 @@ async def get_model_compute_task(script_name:str, script_instance_hash:str, cele
         Multiple clients can be refered to the same compute job URL without creating a new celery task.
         But using the Celery task_id keeps the results available 
         If the compute is done the .compute file is cleaned automatically
+
+        TODO: introduce a scenario for parallel API workers with centralized storage of compute status flag
     """
     
     celery_task_result:AsyncResult = AsyncResult(celery_task_id)
@@ -94,7 +96,8 @@ async def get_model_compute_task(script_name:str, script_instance_hash:str, cele
         return script_result.dict() # output as dict
     else:
         # the job info we can get from a temporary file (.compute) in directory
-        job = library.check_script_model_computing_job(script_name, script_instance_hash)
+        script = library.get_script_request(org=script_org, name=script_name, version=script_version )
+        job = library.check_script_model_computing_job(script, script_instance_hash)
         if not job:
            raise HTTPException(status_code=404, detail="Compute task not found or in error state. Please go back to original request url!") 
         job.celery_task_status = celery_task_result.status
