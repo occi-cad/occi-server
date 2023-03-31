@@ -2,7 +2,7 @@ import os
 import uvicorn as uvicorn
 
 from fastapi import FastAPI, HTTPException, Depends, Response, status
-
+from fastapi.middleware.cors import CORSMiddleware
 
 from celery.result import AsyncResult
 from dotenv import dotenv_values
@@ -44,6 +44,14 @@ if not no_workers and api_generator.request_handler.check_celery() is False:
     raise Exception('*** RESTART API - No Celery connection and/or missing workers: Restart API ****') 
 
 app = FastAPI(openapi_tags=api_generator.get_api_tags(scripts))
+# enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 api_generator.generate_endpoints(api=app, scripts=scripts)
 
 admin = Admin(app, api_generator, passphrase=CONFIG.get('OCCI_ADMIN_PASSPHRASE'))
