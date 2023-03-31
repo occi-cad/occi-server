@@ -193,6 +193,9 @@ class ModelRequestHandler():
 
         """
 
+        print('==== REQUEST ====')
+        print(req)
+
         if req is None or not isinstance(req, ModelRequestInput):
             m = 'ModelRequestHandler::handle(script): No request received'
             self.logger.error(m)
