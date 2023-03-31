@@ -66,7 +66,7 @@ class CadScript(BaseModel):
     description:str = None 
     created_at:datetime = datetime.now()
     updated_at:datetime = datetime.now()
-    prev_version:str =  # TODO
+    prev_version:str = None # TODO
     safe:bool = False # if validated as safe code (not implemented yet)
     published:bool = True # if available to the public
     units:ModelUnits = 'mm'
