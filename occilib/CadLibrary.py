@@ -100,7 +100,7 @@ class CadLibrary:
                 self.script_versions[script.namespace] = [script.version]
             else:
                 if not self.latest_scripts.get(script.name):
-                    scripts_by_namespace_sorted = sorted(scripts_by_namespace, key=lambda s: s.version)
+                    scripts_by_namespace_sorted = sorted(scripts_by_namespace, key=lambda s:  Version.parse(s.version, optional_minor_and_patch=True)) 
                     self.latest_scripts[script.namespace] = scripts_by_namespace_sorted[-1] # pick last one ordered by semver
                     self.script_versions[script.namespace] = [s.version for s in scripts_by_namespace_sorted]
 
@@ -765,7 +765,7 @@ class CadLibrary:
     def _make_cache_compute_script_request(self, script:CadScript, param_dict:dict, batch_id:str=None) -> CadScriptRequest:
 
         script_request = CadScriptRequest(**script.dict())
-        script_request.request.params = self.request_handler.param_dict_to_param_instance(param_dict)
+        script_request.request.params = param_dict # { name_param: value_param, ... }
         script_request.request.hash = script_request.hash()
         script_request.request.batch_id = batch_id
 

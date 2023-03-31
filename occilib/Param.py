@@ -12,13 +12,6 @@ import numpy
 
 from .models import ParamType, ModelUnits
 
-class ParamInstance(BaseModel): 
-    """
-        Instances of Params used in CadScript.request.params
-        Will be outputted in dict with key:name and value the ParamInstance
-    """
-    value:Any = None # active value of param
-
 class ParamConfigBase(BaseModel):
     """
         Base Param class

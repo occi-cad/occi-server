@@ -26,7 +26,7 @@ from contextlib import suppress
 from celery.result import AsyncResult
 
 from .models import ModelRequestInput
-from .Param import ParamConfigBase, ParamInstance
+from .Param import ParamConfigBase
 from .CadScript import CadScriptRequest, CadScriptResult
 from .CadLibrary import CadLibrary
 
@@ -377,27 +377,19 @@ class ModelRequestHandler():
         script_request.request.output = req.output # set format in which to return to API (full=json, model return results.models[{format}])
         
         # in req are also the flattened requested param values
-        # TODO: we will also enable using params={ name: val } in POST requests
-        filled_params:Dict[str,ParamInstance] = {} 
+        filled_params:Dict[str,Any] = {} 
         
         if script_request.params:
             for name, param in script_request.params.items():
                 related_filled_param = getattr(req, name, None)
                 if related_filled_param:
-                    filled_params[name] = ParamInstance(value=related_filled_param)
+                    filled_params[name] = related_filled_param
 
             script_request.request.params = filled_params
 
         # NOTE: script can also have no parameters!    
         return script_request
 
-    def param_dict_to_param_instance(self, param_dict:dict) -> ParamInstance:
-
-        params:Dict[str,ParamInstance] = {}
-        for k,v in param_dict.items():
-            params[k] = ParamInstance(value=v)
-
-        return params
 
 
     #### CACHE PRE-CALCULATION ####

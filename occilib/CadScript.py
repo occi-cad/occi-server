@@ -16,7 +16,7 @@ import json
 import itertools
 
 from .models import ScriptCadEngine, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
-from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions, ParamInstance
+from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions
 
 
 class ModelRequest(BaseModel):
@@ -25,7 +25,7 @@ class ModelRequest(BaseModel):
     """
     created_at:datetime = datetime.now()
     hash:str = None # name+param+values hash id
-    params: Dict[str, ParamInstance] = {}
+    params: Dict[str, Any] = {} # simple key (name of param) and value pair
     format: ModelFormat = 'step' # requested output format of the model
     output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
@@ -39,8 +39,8 @@ class ModelRequest(BaseModel):
             example: ?format=step&output=full&width=100
         '''
         query_param_values = []
-        for param_name, param_instance in self.params.items():
-            query_param_values.append = f'{param_name}={param_instance.value}'
+        for param_name, param_value in self.params.items():
+            query_param_values.append = f'{param_name}={param_value}'
 
         query_param_values_string = '&' + '&'.join(query_param_values) if len(query_param_values) > 0 else ''
 
@@ -126,9 +126,9 @@ class CadScript(BaseModel):
             return f'{org}/{name}'
         return None
 
-    def hash(self, params: Dict[str, ParamInstance]=None) -> str:
+    def hash(self, params: Dict[str, Any]=None) -> str:
         """
-            Hash a given dict of ParamInstance parameters. 
+            Hash a given dict of value parameters. 
             If not given we check if self is a CadScriptRequest and has request.params and use that
         """
         
@@ -142,8 +142,8 @@ class CadScript(BaseModel):
         # NOTE: params can be None if no parameters
         params_str = ''
         if params and len(params.keys()) > 0:
-            for name,param in params.items():
-                params_str += f'{name}={json.dumps(dict(param))}&'
+            for name,param_value in params.items():
+                params_str += f'{name}={param_value}&'
         
         hash = self._hash(self.name + params_str)
         
@@ -204,10 +204,9 @@ class CadScript(BaseModel):
                 param_values[param_name] = value
 
             # place with hash 
-            # convert to Dict[ParamInstance] # TODO: remove this in between step eventually
-            param_set:Dict[Dict[ParamInstance]] = {}
+            param_set:Dict[Dict[str,Any]] = {}
             for k,v in param_values.items():
-                param_set[k] = ParamInstance(value=v)
+                param_set[k] = v
 
             param_set_hash = self.hash(param_set)
             all_model_param_sets[param_set_hash] = param_values
@@ -231,10 +230,9 @@ class CadScript(BaseModel):
                 param_name = list(self.params.values())[index].name
                 param_values[param_name] = value
 
-            # convert to Dict[ParamInstance] # TODO: remove this in between step eventually
-            param_set:Dict[Dict[ParamInstance]] = {}
+            param_set:Dict[Dict[str,Any]] = {}
             for k,v in param_values.items():
-                param_set[k] = ParamInstance(value=v)
+                param_set[k] = v
 
             param_set_hash = self.hash(param_set)
             yield param_set_hash, param_values
