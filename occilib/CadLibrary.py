@@ -664,7 +664,7 @@ class CadLibrary:
             End of compute batch: do something special basic on settings in script.request
         '''
         
-        self.logger.info(f'Handle end of batch with action: {script.request.batch_on_end_action}')
+        self.logger.info(f'Handle end of batch with batch_on_end_action: "{script.request.batch_on_end_action}"')
 
         # compute batch is related to publication of a script
         if script.request.batch_on_end_action == 'publish':
