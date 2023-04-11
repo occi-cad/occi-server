@@ -93,10 +93,25 @@ class CadLibrary:
         '''
         self.api_generator = api_generator
 
+    def reload(self) -> bool:
+        '''
+            Reload library from disk
+        '''
+        if not self.path:
+            self.logger.error('Cannot reload: no library path (self.path) set!')
+            return False
+        
+        self._load_scripts_dir(self.path)
+        self.order_scripts()
+
+
     def order_scripts(self):
         '''
             We have all scripts in self.scripts. Order them for easy access.
         '''
+
+        self.latest_scripts = {}
+        self.script_versions = {}
         
         for script in self.scripts:
             scripts_by_namespace = list(filter(lambda s: s.name == script.name, self.scripts))
@@ -173,6 +188,7 @@ class CadLibrary:
     def _load_scripts_dir(self, path:str = None) -> List[CadScript]:
 
         library_path = Path(path or self.path)
+        self.scripts = [] # reset to be sure
 
         for script_glob in self._template_to_script_globs(self.FILE_STRUCTURE_TEMPLATE):
             for script_path in library_path.glob(script_glob):
@@ -183,6 +199,8 @@ class CadLibrary:
         
         self.source = 'disk'
         return self.scripts
+    
+
 
     def _template_to_script_globs(self, template) -> List[str]:
         '''
@@ -669,7 +687,9 @@ class CadLibrary:
         # compute batch is related to publication of a script
         if script.request.batch_on_end_action == 'publish':
             r = self.set_script_version_endpoint(script)
-            if r: self.logger.info(f'Added endpoint for script "{script.org}/{script.name}/{script.version}" after publish pre-calculation')
+            if r: 
+                self.logger.info(f'Added endpoint for script "{script.org}/{script.name}/{script.version}" after publish pre-calculation')
+                self.reload() # reload scripts to include new script version
 
 
     def set_script_version_endpoint(self, script:CadScript|CadScriptRequest|CadScriptResult) -> bool:
