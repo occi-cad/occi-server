@@ -8,7 +8,7 @@
 """
 
 from datetime import datetime
-from typing import List, Any, Dict, Tuple, Iterator
+from typing import List, Any, Dict, Tuple, Iterator, Optional
 from pydantic import BaseModel, validator
 import hashlib
 import base64
@@ -70,7 +70,7 @@ class CadScript(BaseModel):
     prev_version:str = None # TODO
     safe:bool = False # if validated as safe code (not implemented yet)
     published:bool = True # if available to the public
-    units:ModelUnits = 'mm'
+    units:Optional[ModelUnits] = None
     params:Dict[str, ParamConfigBase | ParamConfigNumber | ParamConfigText | ParamConfigBoolean | ParamConfigOptions ] = {} # list of param definitions - TODO: combine ParamTypes
     param_presets:Dict[str, dict] = {} # TODO: presets of parameters by name and then a { param_name: value } dict
     public_code: bool = False # if public user of the API can see the source code of the CAD script

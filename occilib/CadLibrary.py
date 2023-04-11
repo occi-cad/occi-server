@@ -95,7 +95,7 @@ class CadLibrary:
 
     def reload(self) -> bool:
         '''
-            Reload library from disk
+            Reload library from disk. NOTE: it's slow, we probably don't want to use this too ofter!
         '''
         if not self.path:
             self.logger.error('Cannot reload: no library path (self.path) set!')
@@ -103,7 +103,6 @@ class CadLibrary:
         
         self._load_scripts_dir(self.path)
         self.order_scripts()
-
 
     def order_scripts(self):
         '''
@@ -833,6 +832,7 @@ class CadLibrary:
             return False
         
         self.write_script(script)
+        self._add_script_internal(script) # add to internal script data
 
         return True
         
@@ -869,14 +869,23 @@ class CadLibrary:
 
                 json_pretty_str = json.dumps(config, indent=2) # hack around pydantic lack of pretty print
                 f.write(json_pretty_str) # write config 
-
+            
             return True
             
         except Exception as e:
             self.logger.error(f'Could not write script: {e}')
             return False
-
         
+    def _add_script_internal(self, script:CadScript):
+        '''
+            Add incoming script version to existing internal data structures
+        '''
+        if len(list(filter(lambda s: s.name == script.name, self.scripts))) == 0: # make sure it does not exist already
+            self.scripts.append(script)
+        scripts_by_namespace = list(filter(lambda s: s.name == script.name, self.scripts))
+        scripts_by_namespace_sorted = sorted(scripts_by_namespace, key=lambda s:  Version.parse(s.version, optional_minor_and_patch=True)) 
+        self.latest_scripts[script.namespace] = scripts_by_namespace_sorted[-1] # pick last one ordered by semver
+        self.script_versions[script.namespace] = [s.version for s in scripts_by_namespace_sorted]
 
 
     def script_exists(self, script:CadScript) -> bool:
