@@ -87,7 +87,7 @@ class ApiGenerator:
             return await self.request_handler.handle(req)
 
 
-    def _generate_version_endpoint(self,script:CadScript):
+    def _generate_version_endpoint(self,script:CadScript) -> bool:
         '''
             We generate specific endpoints for all script versions. 
             IMPORTANT: every script needs a different InputModel (because it might have different params)
@@ -130,7 +130,10 @@ class ApiGenerator:
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
         '''
-            
+        
+        self.logger.info(f'Added endpoint for script version: "{script.org}/{script.name}/{script.version}"')
+
+        return True
 
 
     def _parse_script_dict(self, script:dict) -> CadScript:

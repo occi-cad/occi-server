@@ -669,7 +669,7 @@ class CadLibrary:
         # compute batch is related to publication of a script
         if script.request.batch_on_end_action == 'publish':
             r = self.set_script_version_endpoint(script)
-            if r: self.logger.info(f'Added endpoint for script {script.namespace}:{script.version}')
+            if r: self.logger.info(f'Added endpoint for script "{script.org}/{script.name}/{script.version}" after publish pre-calculation')
 
 
     def set_script_version_endpoint(self, script:CadScript|CadScriptRequest|CadScriptResult) -> bool:
@@ -678,8 +678,7 @@ class CadLibrary:
             self.logger.error(f'Cannot create endpoint for script "{script.name}": Library has no reference to api_generator. Use Library.set_api_generator()')
             return False
         
-        self.api_generator._generate_version_endpoint(script)
-        return True
+        return self.api_generator._generate_version_endpoint(script)
 
 
 
