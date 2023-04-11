@@ -130,8 +130,6 @@ class ApiGenerator:
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
         '''
-        
-        self.logger.info(f'Added endpoint for script version: "{script.org}/{script.name}/{script.version}"')
 
         return True
 
