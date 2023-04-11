@@ -48,6 +48,7 @@ class CadLibrary:
     CADSCRIPT_CONFIG_GLOB = ['*.json']
     COMPUTE_FILE_EXT = '.compute'
 
+    api_generator = None # set when needed to generate end points 
     request_handler = None # set when precomputing cache
     searcher:CadLibrarySearch = None 
     source = 'disk' # source of the scripts: disk or file (debug)
@@ -86,7 +87,11 @@ class CadLibrary:
 
         self._print_library_overview()
 
-        
+    def set_api_generator(self, api_generator:Any): # use any here to avoid circular import
+        '''
+            Sometimes the library needs access to api_generator
+        '''
+        self.api_generator = api_generator
 
     def order_scripts(self):
         '''
@@ -650,11 +655,30 @@ class CadLibrary:
         if batch_id and (batch_tasks_done == batch_tasks_total):
             self.logger.info(f'==== END OF BATCH "{batch_id}" TOOK {self._compute_batch_stats[batch_id].duration/1000}s ====')
             # del self._compute_batch_stats[batch_id] # TODO: make something smarter: delete after timeout
-            # TODO: do something more later
+            self.handle_end_of_batch(script_result)
             
-
-
         return script_result
+    
+    def handle_end_of_batch(self, script:CadScript|CadScriptRequest|CadScriptResult):
+        '''
+            End of compute batch: do something special basic on settings in script.request
+        '''
+
+        # compute batch is related to publication of a script
+        if script.request.batch_on_end_action == 'publish':
+            r = self.set_script_version_endpoint(script)
+            if r: self.logger.info(f'Added endpoint for script {script.namespace}:{script.version}')
+
+
+    def set_script_version_endpoint(self, script:CadScript|CadScriptRequest|CadScriptResult) -> bool:
+
+        if self.api_generator is None: 
+            self.logger.error(f'Cannot create endpoint for script "{script.name}": Library has no reference to api_generator. Use Library.set_api_generator()')
+            return False
+        
+        return self.api_generator._generate_version_endpoint(script)
+
+
 
     def compute_script_cache(self, org:str, name:str) -> str:
         '''

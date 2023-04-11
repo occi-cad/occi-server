@@ -15,7 +15,7 @@ import base64
 import json
 import itertools
 
-from .models import ScriptCadEngine, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus
+from .models import ScriptCadEngine, ModelContentLicense, ModelResult, ModelFormat, ModelQuality, RequestResultFormat, ModelUnits, EndpointStatus, ComputeBatchEndAction
 from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamConfigBoolean, ParamConfigOptions
 
 
@@ -30,6 +30,7 @@ class ModelRequest(BaseModel):
     output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
     batch_id: str = None # some id to group requests 
+    batch_on_end_action: ComputeBatchEndAction = 'publish'
     meta: dict = {} # TODO
     
 

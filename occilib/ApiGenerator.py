@@ -62,7 +62,7 @@ class ApiGenerator:
 
 
 
-    def _generate_default_version_endpoint(self, script:dict):
+    def _generate_default_version_endpoint(self, script:CadScript):
         '''
             We use the latest script versions to generate the default endpoints
         '''
@@ -87,7 +87,7 @@ class ApiGenerator:
             return await self.request_handler.handle(req)
 
 
-    def _generate_version_endpoint(self,script:dict):
+    def _generate_version_endpoint(self,script:CadScript):
         '''
             We generate specific endpoints for all script versions. 
             IMPORTANT: every script needs a different InputModel (because it might have different params)

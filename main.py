@@ -53,6 +53,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 api_generator.generate_endpoints(api=app, scripts=scripts)
+library.set_api_generator(api_generator)
 
 admin = Admin(app, api_generator, passphrase=CONFIG.get('OCCI_ADMIN_PASSPHRASE'))
 

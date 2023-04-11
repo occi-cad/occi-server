@@ -152,7 +152,7 @@ class Admin:
     def _get_publish_job(self, id:str) -> PublishJob:
         """
             Get the state of the publish job
-            !!!! TODO: We need to centralize job info in redis if we want to use multiple API instances
+            !!!! TODO: We need to centralize job info in Redis if we want to use multiple API instances
         """
         pub_job = self.publish_jobs.get(id)
         if pub_job:

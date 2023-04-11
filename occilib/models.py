@@ -76,6 +76,10 @@ class ComputeBatchStats(BaseModel):
     done:int = 0
     duration:int = 0 # in ms
 
+class ComputeBatchEndAction(str,Enum):
+    publish ='publish'
+    # TODO: more?
+
 
 #### IO MODELS ####
 
