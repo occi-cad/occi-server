@@ -678,7 +678,8 @@ class CadLibrary:
             self.logger.error(f'Cannot create endpoint for script "{script.name}": Library has no reference to api_generator. Use Library.set_api_generator()')
             return False
         
-        return self.api_generator._generate_version_endpoint(script)
+        self.api_generator._generate_version_endpoint(script)
+        return True
 
 
 
