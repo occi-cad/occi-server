@@ -2,6 +2,7 @@
 # ./components # eventually add this to .gitignore
 ./archiyou-compute-worker
 **/*-cache/
+scriptlibrary/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
