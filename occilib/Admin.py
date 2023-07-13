@@ -127,7 +127,7 @@ class Admin:
 
         return credentials
     
-    async def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
+    async def _handle_publish_request(self, req:PublishRequest) -> dict:
         """ 
             Handles a request to publish a given script
         """
@@ -157,7 +157,7 @@ class Admin:
 
         self.publish_jobs[pub_job.id] = pub_job
 
-        return pub_job
+        return pub_job.dict() # NOTE: To test is returning pub_job directly return wrong param?
     
     def _get_publish_job(self, id:str) -> PublishJob:
         """
