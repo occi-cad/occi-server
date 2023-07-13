@@ -101,14 +101,15 @@ class Admin:
             api = self.api
             # /admin/publish
             @api.post('/admin/publish')
-            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
+            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
                 # !!!! BEWARE !!!! Using response types in these route methods (like -> PublishJob ) 
                 # seems to force some re-parsing (and somehow skipping upgrading params in CadScript.params ) !!!!
-                return self._handle_publish_request(req).dict()
+                job = await self._handle_publish_request(req)
+                return job
             
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
-            async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
+            async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
                 # !!!! BEWARE !!!! Using response types in these route methods (like -> PublishJob ) 
                 # seems to force some re-parsing (and somehow skipping upgrading params in CadScript.params ) !!!!
                 return self._get_publish_job(job_id).dict()
