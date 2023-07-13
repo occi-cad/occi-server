@@ -23,7 +23,8 @@ class ParamConfigBase(BaseModel):
     default:Any = None # default value
     description:str = None
     units:ModelUnits = None
-    iterable:bool = True # if not, set in subclass
+    iterable:bool = True # used to calculate parameter variants. See ParamConfig type class below
+    disabled:bool = False # disable parameter (value for parameter will be default but no chance possible)
 
 
 class ParamConfigNumber(ParamConfigBase):

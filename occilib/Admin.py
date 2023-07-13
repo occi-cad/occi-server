@@ -132,6 +132,10 @@ class Admin:
             Handles a request to publish a given script
         """
 
+        #### DEBUG ####
+        print('_handle_publish_request')
+        print(req.script)
+
         # Do the needed checks around unique namespaces
         self._check_publish_request(req) # will raise Error
         # Save the script in OCCI library on disk
@@ -146,6 +150,11 @@ class Admin:
         asyncio.create_task(self.api_generator.library.compute_script_cache_async(req.script, batch_id, on_done)) # don't await this
         # Report back to the API user about the PublishJob
         pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
+
+        #### DEBUG ####
+        print('PUB JOB')
+        print(pub_job)
+
         self.publish_jobs[pub_job.id] = pub_job
         return pub_job
     

@@ -10,9 +10,10 @@ os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from occilib.CadLibrary import CadLibrary
 from occilib.CadScript import CadScript
+from occilib.Admin import Admin, PublishJob, PublishRequest
 
 lib = CadLibrary()
-print (lib._load_scripts_dir())
+#print (lib._load_scripts_dir())
 #lib._print_library_overview()
 #print (lib.get_script_request('tests/box', version=0.5))
 #print (lib.get_script_request('tests/box'))
@@ -76,4 +77,9 @@ print(lib._get_script_version_cached_model_dir(script))
 #### TEST BUG ####
 
 script = lib.get_script_request(org='mark', name='pubtest', version='2.12.0')
-lib.check_script_model_computing_job(script=script, script_instance_hash=script.hash())
+
+#lib.check_script_model_computing_job(script=script, script_instance_hash=script.hash())
+
+# test if CadScript params are upgraded
+req = PublishRequest(script=script)
+print(req.script.params)

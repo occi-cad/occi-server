@@ -454,7 +454,7 @@ class CadLibrary:
             return None
         else:
             output_model_filename = f'{script.name}-{script.hash()}.{script.request.format}'
-            return FileResponse(cached_model_path, filename=output_model_filename)
+            return FileResponse(cached_model_path, filename=output_model_filename) # see: https://fastapi.tiangolo.com/advanced/custom-response/#fileresponse - TODO: media_type?
 
 
     def _apply_single_model_format(self, script:CadScriptResult) -> CadScriptResult:
