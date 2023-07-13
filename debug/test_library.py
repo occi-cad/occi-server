@@ -82,4 +82,4 @@ script = lib.get_script_request(org='mark', name='pubtest', version='2.12.0')
 
 # test if CadScript params are upgraded
 req = PublishRequest(script=script)
-print(req.script.params)
+print(req.script.dict())
