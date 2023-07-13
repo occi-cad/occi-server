@@ -112,7 +112,7 @@ class Admin:
             async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
                 # !!!! BEWARE !!!! Using response types in these route methods (like -> PublishJob ) 
                 # seems to force some re-parsing (and somehow skipping upgrading params in CadScript.params ) !!!!
-                return self._get_publish_job(job_id).dict()
+                return self._get_publish_job(job_id)
             
             # /admin/unpublish
             @api.post('/admin/unpublish/{script_id:int}')
