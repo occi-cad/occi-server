@@ -152,10 +152,11 @@ class Admin:
         pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
 
         #### DEBUG ####
-        print('PUB JOB')
-        print(pub_job)
+        print('OUTPUT PUB JOB')
+        print(pub_job.json())
 
         self.publish_jobs[pub_job.id] = pub_job
+
         return pub_job
     
     def _get_publish_job(self, id:str) -> PublishJob:
