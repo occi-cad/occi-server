@@ -102,15 +102,16 @@ class Admin:
             # /admin/publish
             @api.post('/admin/publish')
             async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
-                job = await self._handle_publish_request(req)
-                print('/PUB')
-                print(job)
-                return job
+                # !!!! BEWARE !!!! Using response types in these route methods (like -> PublishJob ) 
+                # seems to force some re-parsing (and somehow skipping upgrading params in CadScript.params ) !!!!
+                return self._handle_publish_request(req).dict()
             
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
             async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
-                return self._get_publish_job(job_id)
+                # !!!! BEWARE !!!! Using response types in these route methods (like -> PublishJob ) 
+                # seems to force some re-parsing (and somehow skipping upgrading params in CadScript.params ) !!!!
+                return self._get_publish_job(job_id).dict()
             
             # /admin/unpublish
             @api.post('/admin/unpublish/{script_id:int}')
@@ -130,14 +131,10 @@ class Admin:
 
         return credentials
     
-    async def _handle_publish_request(self, req:PublishRequest) -> dict:
+    async def _handle_publish_request(self, req:PublishRequest) -> PublishJob:
         """ 
             Handles a request to publish a given script
         """
-
-        #### DEBUG ####
-        print('_handle_publish_request')
-        print(req.script)
 
         # Do the needed checks around unique namespaces
         self._check_publish_request(req) # will raise Error
@@ -154,13 +151,10 @@ class Admin:
         # Report back to the API user about the PublishJob
         pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
 
-        #### DEBUG ####
-        print('OUTPUT PUB JOB')
-        print(pub_job.json())
-
         self.publish_jobs[pub_job.id] = pub_job
 
-        return pub_job.dict() # NOTE: To test is returning pub_job directly return wrong param?
+        return pub_job
+    
     
     def _get_publish_job(self, id:str) -> PublishJob:
         """
