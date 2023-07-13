@@ -101,12 +101,15 @@ class Admin:
             api = self.api
             # /admin/publish
             @api.post('/admin/publish')
-            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
-                return await self._handle_publish_request(req)
+            async def publish(req:PublishRequest, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
+                job = await self._handle_publish_request(req)
+                print('/PUB')
+                print(job)
+                return job
             
             # /admin/publish/{job_id}
             @api.get('/admin/publish/{job_id}')
-            async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> PublishJob:
+            async def get_pub_job(job_id:str, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)) -> dict:
                 return self._get_publish_job(job_id)
             
             # /admin/unpublish
