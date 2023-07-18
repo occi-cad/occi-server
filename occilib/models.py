@@ -85,7 +85,7 @@ class ComputeBatchEndAction(str,Enum):
 
 class ModelRequestInput(BaseModel):
     """ Used to handle input from API
-        This is model is extended on runtime to include specific parameter names:
+        This model is extended on runtime to include specific parameter names:
         ie: bracket?width=100
         Is is then turned into a generic ModelRequest
     """

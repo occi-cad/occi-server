@@ -24,7 +24,8 @@ class ParamConfigBase(BaseModel):
     description:str = None
     units:ModelUnits = None
     iterable:bool = True # used to calculate parameter variants. See ParamConfig type class below
-    disabled:bool = False # disable parameter (value for parameter will be default but no chance possible)
+    enabled:bool = True # enable parameter (value for parameter will be default but no chance possible)
+    order:int = 0 # for ordering (TODO)
 
 
 class ParamConfigNumber(ParamConfigBase):
