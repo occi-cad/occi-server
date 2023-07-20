@@ -175,7 +175,8 @@ class CadScript(BaseModel):
             Get the parameter sets (in {'param_name':value} format) of all possible parametric models
             Also return the model hash in key
             Resulting return data: { 'hash1' : { param_name: value, {..} }, 'hash2' : {...}}
-            !!!! IMPORTANT: Can be slow !!!!
+            !!!! IMPORTANT: Can be slow !!!! Use iterate_possible_model_params_dicts()
+            
         """
 
         if self.is_cachable() is False:
@@ -183,7 +184,11 @@ class CadScript(BaseModel):
 
         all_values_per_parameter = []
         for param in self.params.values():
-            all_values_per_parameter.append(param.values())
+            if param.enabled:
+                all_values_per_parameter.append(param.values())
+            else:
+                # if disabled only use the default value
+                all_values_per_parameter.append([param.default])
 
         all_combinations = list(itertools.product(*all_values_per_parameter))
         """ the combinations are generated from the starting value 
@@ -221,9 +226,13 @@ class CadScript(BaseModel):
             Iterator over all combinations of param values
         '''
 
-        all_values_per_parameter = []
+        all_values_per_parameter = [] # groups parameter values [ [p1v1,p1v2],[p2v1]]
         for param in self.params.values():
-            all_values_per_parameter.append(param.values())
+            if param.enabled:
+                all_values_per_parameter.append(param.values())
+            else:
+                # if disabled only use the default value
+                all_values_per_parameter.append([param.default])
 
         for combination in itertools.product(*all_values_per_parameter):
             param_values = {}
@@ -248,7 +257,8 @@ class CadScript(BaseModel):
 
         num_combinations = 1
         for param_obj in self.params.values():
-            num_combinations *= len(param_obj.values())
+            if param_obj.enabled:
+                num_combinations *= len(param_obj.values())
 
         return num_combinations
 
