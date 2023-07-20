@@ -221,15 +221,22 @@ class ApiGenerator:
             See: https://docs.pydantic.dev/usage/types
         """
         if param.type == 'number':
-            return conint(ge=param.start, le=param.end, multiple_of=param.step)
+            if param.enabled:
+                return conint(ge=param.start, le=param.end, multiple_of=param.step)
+            else:
+                # Param disabled. TODO: can we make this value constaint a bit more elegant?
+                return conint(ge=param.default, le=param.default, multiple_of=param.step)
         elif param.type == 'text':
+            # TODO: disabled constraints
             return constr(strip_whitespace=True, 
                             strict=True, 
                             min_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MINLENGTH'], 
                             max_length=PARAM_SETTINGS['PARAM_INPUT_TEXT_MAXLENGTH'])
         elif param.type == 'boolean':
+            # TODO: disabled constraints
             return bool
         elif param.type == 'options':
+            # TODO: disabled constraints
             # create dynamic enum
             enum_kv = zip(param.options, param.options)
             class TempEnum(str, Enum):
