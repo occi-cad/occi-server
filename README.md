@@ -29,6 +29,25 @@ git clone https://github.com/occi-cad/scriptlibrary
 4. Once everything is started up and connected go to localhost:8090 to see the OCCI server basic information
 5. Get your first parametric model from OCCI example library. Go to url: http://localhost:8090/tests/box. This will give you a parametric box in STEP file. Use http://localhost:8090/tests/box?output=full to see more information. 
 
+## Python Development only
+
+To debug the Python functionality only, disable all workers in .env file: 
+
+```
+OCCI_CADQUERY=0
+OCCI_ARCHIYOU=0
+# etc
+```
+
+And then launch the API:
+
+```
+python main.py
+```
+
+Check out various test scripts in debug/
+
+
 ## OCCI API docs
 
 We have auto-generated API docs. Go to http://localhost:8090/docs on your OCCI server for all query possibilities. Here are the basics:

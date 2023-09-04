@@ -87,6 +87,7 @@ class CadLibrary:
 
         self._print_library_overview()
 
+
     def set_api_generator(self, api_generator:Any): # use any here to avoid circular import
         '''
             Sometimes the library needs access to api_generator
@@ -150,9 +151,9 @@ class CadLibrary:
 
         return script_request
 
-    def get_script_versions(self, name:str) -> List[str]:
+    def get_script_versions(self, script:CadScript|CadScriptRequest) -> List[str]:
 
-        return self.script_versions.get(name)
+        return self.script_versions.get(script.namespace)
 
 
     def _load_scripts_json(self, rel_path:str) -> List[CadScriptRequest]:

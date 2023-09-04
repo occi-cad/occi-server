@@ -43,6 +43,8 @@ class CadLibrarySearch:
 
     def build_index(self):
 
+        self.logger.info('**** Building Library Search index ****')
+
         schema = self._pydantic_model_to_whoosh_schema(CadScript)
         lib_dir_path = f'{self.library.path}/{self.SEARCH_INDEX_DIRNAME}'
         Path(lib_dir_path).mkdir(parents=True, exist_ok=True)
@@ -60,6 +62,8 @@ class CadLibrarySearch:
         # add fuzzy text search
         self.parser.add_plugin(whoosh.qparser.FuzzyTermPlugin())
 
+        self.logger.info('**** Library Search index complete ****')
+
     def search(self, q:str) -> List[CadScript]:
 
         # Add search fuzzyness of distance 1. See: https://whoosh.readthedocs.io/en/latest/parsing.html
@@ -68,7 +72,7 @@ class CadLibrarySearch:
         
         with self.index.searcher() as searcher:
             results = searcher.search(query_obj)
-            if results.estimated_min_length() > 0:
+            if len(results) > 0:
                 result_dicts = []
                 for r in results:
                     # add url on the fly for now

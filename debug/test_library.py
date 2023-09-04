@@ -22,9 +22,6 @@ lib = CadLibrary()
 #print(lib.scripts[2].all_possible_model_params())  
 #lib.compute_cache()
 
-#### SEARCH ####
-#print(lib.search('box'))
-
 ### PRECOMPUTE ###
 '''
 script = lib.get_script_request(org='tests', name='sphere')
@@ -76,6 +73,7 @@ print(lib._get_script_version_cached_model_dir(script))
 
 #### TEST BUG ####
 
+'''
 script = lib.get_script_request(org='mark', name='pubtest', version='2.12.0')
 
 #lib.check_script_model_computing_job(script=script, script_instance_hash=script.hash())
@@ -83,3 +81,13 @@ script = lib.get_script_request(org='mark', name='pubtest', version='2.12.0')
 # test if CadScript params are upgraded
 req = PublishRequest(script=script)
 print(req.script.dict())
+'''
+
+#### TEST SEARCH ####
+# print(lib.search('box'))
+
+#### LATEST SCRIPTS ####
+# print(lib.latest_scripts)
+
+#### ALL VERSIONS OF SCRIPT ####
+print(lib.script_versions)

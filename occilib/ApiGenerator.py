@@ -31,11 +31,14 @@ class ApiGenerator:
     def __init__(self, library:CadLibrary, no_workers:bool=False):
 
         self.library = library
+        self._setup_logger()
 
         if isinstance(self.library, CadLibrary):
             self.request_handler = ModelRequestHandler(self.library, no_workers)
         else:
             self.error('ApiGenerator::__init__(library): Please supply a library instance to this ApiGenerator')
+
+    
 
 
     def get_api_tags(self, scripts:List[CadScript]):
@@ -85,6 +88,8 @@ class ApiGenerator:
             req.script_name = script.name
             req.script_special_requested_entity = 'versions'
             return await self.request_handler.handle(req)
+        
+        self.logger.info(f'=> Generated default API endpoint: "{script.org}/{script.name}" and /versions')
 
 
     def _generate_version_endpoint(self,script:CadScript) -> bool:
@@ -130,6 +135,8 @@ class ApiGenerator:
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
         '''
+
+        self.logger.info(f'=> Generated API endpoint: "{script.org}/{script.name}/{script.version}"')
 
         return True
 
@@ -270,7 +277,26 @@ class ApiGenerator:
             self.logger.error(e)
 
     
+    #### UTILS ####
 
+    def _setup_logger(self):
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(level=logging.INFO)
+
+        try:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)-4s %(message)s')
+            handler.setFormatter(formatter)
+
+            if (self.logger.hasHandlers()):  # see: http://tiny.cc/v5w6gz
+                self.logger.handlers.clear()
+
+            self.logger.addHandler(handler)
+
+        except Exception as e:
+            self.logger.error(e)
 
     
         

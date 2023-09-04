@@ -205,7 +205,7 @@ class ModelRequestHandler():
             # check if script exists
             if script:
                 if req.script_special_requested_entity == 'versions':
-                    return self.library.get_script_versions(name=script.name)
+                    return self.library.get_script_versions(script)
                 elif req.script_special_requested_entity == 'params':
                     return script.params
                 elif req.script_special_requested_entity == 'presets':
