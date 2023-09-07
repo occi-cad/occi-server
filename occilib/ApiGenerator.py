@@ -111,6 +111,11 @@ class ApiGenerator:
             req.script_version = script.version
             
             return await self.request_handler.handle(req)
+        
+        # sometimes its handy to just get the script
+        @api.get(f'/{script.org}/{script.name}/{script.version}/script', tags=[script.name])
+        async def get_script():
+            return script
     
         @api.get(f'/{script.org}/{script.name}/{script.version}/params', tags=[script.name])
         async def get_model_get_params(req:SpecificEndpointInputModel=Depends()):
