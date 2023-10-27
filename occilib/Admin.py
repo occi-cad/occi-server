@@ -142,19 +142,26 @@ class Admin:
         # Save the script in OCCI library on disk
         if self.api_generator.library.add_script(req.script) is False:
             raise HTTPException(status_code=400, detail='Cannot publish script. It already exists. Try another name or version tag!')
+        
         # If needed (and possible) start pre-calculation of models into cache asynchronously
-        batch_id = str(uuid.uuid4())
+        if not req.pre_calculate:
+            # no compute needed
+            # TODO: test the script in some ways?
+            return PublishJob(script=req.script, status='success')
+        else:
+            # lets do a pre-caching compute
+            batch_id = str(uuid.uuid4())
+        
+            def on_done(batch_id) -> bool:
+                self.publish_jobs[pub_job.id].status = 'success'
 
-        def on_done(batch_id) -> bool:
-            self.publish_jobs[pub_job.id].status = 'success'
+            asyncio.create_task(self.api_generator.library.compute_script_cache_async(req.script, batch_id, on_done)) # don't await this
+            # Report back to the API user about the PublishJob
+            pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
 
-        asyncio.create_task(self.api_generator.library.compute_script_cache_async(req.script, batch_id, on_done)) # don't await this
-        # Report back to the API user about the PublishJob
-        pub_job = PublishJob(id=batch_id, script=req.script, status='computing')
+            self.publish_jobs[pub_job.id] = pub_job
 
-        self.publish_jobs[pub_job.id] = pub_job
-
-        return pub_job
+            return pub_job
     
     
     def _get_publish_job(self, id:str) -> PublishJob:

@@ -761,22 +761,26 @@ class CadLibrary:
         
         # basic batch information to keep track of progress
         num_variants = script.get_num_variants()
-        self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
 
-        for hash,param_values in script.iterate_possible_model_params_dicts():
-            # TODO: should we await the results here instead of creating the tasks concurrently - it might block the event loop
-            task = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
-            # IMPORTANT: keep references otherwise GC might remove tasks. See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
-            self._background_async_tasks.add(task)
-            task.add_done_callback(self._background_async_tasks.discard) # auto remove reference after completion
-            await task # this is needed to capture every result sequentially
+        if num_variants is None:
+            return 'no-precompute possible'
+        else:
+            self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
 
-        # after all tasks are done
-        # TODO: do we still need to check end of batch in task done handler?
-        if on_done and callable(on_done):
-            on_done(compute_batch_id)
+            for hash,param_values in script.iterate_possible_model_params_dicts():
+                # TODO: should we await the results here instead of creating the tasks concurrently - it might block the event loop
+                task = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
+                # IMPORTANT: keep references otherwise GC might remove tasks. See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
+                self._background_async_tasks.add(task)
+                task.add_done_callback(self._background_async_tasks.discard) # auto remove reference after completion
+                await task # this is needed to capture every result sequentially
 
-        return compute_batch_id
+            # after all tasks are done
+            # TODO: do we still need to check end of batch in task done handler?
+            if on_done and callable(on_done):
+                on_done(compute_batch_id)
+
+            return compute_batch_id
 
     def compute_cache(self):
         """

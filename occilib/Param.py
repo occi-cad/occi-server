@@ -47,6 +47,9 @@ class ParamConfigBoolean(ParamConfigBase):
     """
     type:ParamType = 'boolean'
 
+    def values(self) -> List[bool]:
+        return [True, False]
+
 
 class ParamConfigText(ParamConfigBase):
     """
@@ -56,6 +59,9 @@ class ParamConfigText(ParamConfigBase):
     min_length:int = 0
     max_length:int = 255
     iterable = False
+
+    def values(self) -> None:
+        return None # which means infinite
 
 class ParamConfigOptions(ParamConfigBase):
     """
