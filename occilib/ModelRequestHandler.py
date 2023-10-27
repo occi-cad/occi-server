@@ -381,7 +381,7 @@ class ModelRequestHandler():
         if script_request.params:
             for name, param in script_request.params.items():
                 related_filled_param = getattr(req, name, None)
-                if related_filled_param:
+                if related_filled_param is not None:
                     filled_params[name] = related_filled_param
 
             script_request.request.params = filled_params
