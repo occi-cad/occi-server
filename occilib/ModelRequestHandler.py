@@ -230,11 +230,10 @@ class ModelRequestHandler():
 
         else:
             # no cache - but already computing?
-
             computing_job = self.library.check_script_model_computing_job(script=requested_script, script_instance_hash=requested_script.hash())
             if computing_job is not None:
                 # refer back to compute url
-                return self.got_to_computing_job_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
+                return self.go_to_computing_job_url(requested_script,computing_job.celery_task_id, set_compute_status=False)
             else:
                 # no cache: submit to workers
                 if self.celery_connected:
@@ -248,7 +247,7 @@ class ModelRequestHandler():
                     # wait time is over before compute could finish:
                     if result_or_timeout is None:
                         # no result
-                        return self.got_to_computing_job_url(requested_script, task.id)
+                        return self.go_to_computing_job_url(requested_script, task.id)
                     else:
                         # check and handle 
                        return self.handle_script_result(result_or_timeout)
@@ -348,7 +347,7 @@ class ModelRequestHandler():
             return compute_result
         return wrapper
 
-    def got_to_computing_job_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
+    def go_to_computing_job_url(self, script:CadScriptRequest, task_id:str, set_compute_status:bool=True) -> RedirectResponse:
         """
             When compute result takes longer then WAIT_FOR_COMPUTE_RESULT_UNTILL_REDIRECT
             Redirect to compute status url which the user can query untill the compute task is done 
@@ -374,6 +373,7 @@ class ModelRequestHandler():
 
         script_request.request.format = req.format
         script_request.request.output = req.output # set format in which to return to API (full=json, model return results.models[{format}])
+        script_request.request.settings = req.settings
         
         # in req are also the flattened requested param values
         filled_params:Dict[str,Any] = {} 

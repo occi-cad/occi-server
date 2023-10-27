@@ -95,6 +95,8 @@ class ModelRequestInput(BaseModel):
     script_special_requested_entity:str = None # requested entity: None=script, versions, params, presets
     format: ModelFormat = 'step'
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
+    settings: dict = {} # more refined settings (maybe cad engine specific) 
+
     # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
 

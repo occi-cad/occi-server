@@ -82,6 +82,13 @@ class ApiGenerator:
             req.script_name = script.name # this is important to identify the requested script
             return await self.request_handler.handle(req)
         
+        # Add POST method to allow more refined settings 
+        @api.post(f'/{script.org}/{script.name}', tags=[script.name])
+        async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
+            req.script_org = script.org
+            req.script_name = script.name
+            return await self.request_handler.handle(req)
+        
         @api.get(f'/{script.org}/{script.name}/versions', tags=[script.name]) # IMPORTANT: this route needs to be before '/{script.name}/{{version}}'
         async def get_model_get_versions(req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
@@ -100,7 +107,7 @@ class ApiGenerator:
         '''
 
         # we generate specific input models that handle param names: bracket?width=10
-        SpecificEndpointInputModel = self._generate_endpoint_input_model(script)
+        SpecificEndpointInputModel = self._generate_endpoint_input_model(script) # extended ModelRequestInput
         
         api = self.api
 
@@ -133,15 +140,16 @@ class ApiGenerator:
             req.script_special_requested_entity = 'presets'
             return await self.request_handler.handle(req)
 
-        # NOTE: Don't add copies of the above endpoints in POST for now. For clarity
-        '''
-        @api.post(f'/{script.name}', tags=[script.name])
+        # Add POST method to allow more refined settings 
+        @api.post(f'/{script.org}/{script.name}/{script.version}', tags=[script.name])
         async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
-            req.script_name = script.name # this is important to identify the requested script
+            req.script_org = script.org
+            req.script_name = script.name
+            req.script_version = script.version
             return await self.request_handler.handle(req)
-        '''
+        
 
-        self.logger.info(f'=> Generated API endpoint: "{script.org}/{script.name}/{script.version}"')
+        self.logger.info(f'=> Generated API endpoints at: "{script.org}/{script.name}/{script.version}"')
 
         return True
 

@@ -22,6 +22,7 @@ from .Param import ParamConfigBase, ParamConfigNumber, ParamConfigText, ParamCon
 class ModelRequest(BaseModel):
     """
         Request to execute CadScript with given params and output form
+        This model is added at CadScriptRequest.request
     """
     created_at:datetime = datetime.now()
     hash:str = None # name+param+values hash id
@@ -31,7 +32,7 @@ class ModelRequest(BaseModel):
     quality: ModelQuality = 'high' # TODO
     batch_id: str = None # some id to group requests 
     batch_on_end_action: ComputeBatchEndAction = 'publish'
-    meta: dict = {} # TODO
+    settings: dict = {} # specific options for execution engine
     
 
     def get_param_query_string(self) -> str:
@@ -267,6 +268,7 @@ class CadScript(BaseModel):
 class CadScriptRequest(CadScript):
     """
         CadScript that is used to make a request
+        Extends CadScript with execution request specific information
     """
     
     status:EndpointStatus = 'success'
