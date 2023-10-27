@@ -722,29 +722,33 @@ class CadLibrary:
 
         # basic batch information to keep track of progress
         num_variants = script.get_num_variants()
-        compute_batch_id = str(uuid.uuid4())
 
-        # IMPORTANT: currently the tasks of a cache batch are saved centrally in the main API instance
-        # This might not scale very well with multiple API instances (like is normal with FastAPI/uvicorn in production)
-        # The API instances do maintain a link with the task by waiting for it asynchronously 
-        # But requests from API user might come at any API instance
-        # TODO: use redis to save stats on different compute jobs?
-        self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
+        if num_variants is None:
+            return None
+        else:
+            compute_batch_id = str(uuid.uuid4())
 
-        self.logger.info(f'==== START COMPUTE CACHE FOR SCRIPT "{script.name}" with {num_variants} model variants ====')
+            # IMPORTANT: currently the tasks of a cache batch are saved centrally in the main API instance
+            # This might not scale very well with multiple API instances (like is normal with FastAPI/uvicorn in production)
+            # The API instances do maintain a link with the task by waiting for it asynchronously 
+            # But requests from API user might come at any API instance
+            # TODO: use redis to save stats on different compute jobs?
+            self._compute_batch_stats[compute_batch_id] = ComputeBatchStats(tasks=num_variants)
+
+            self.logger.info(f'==== START COMPUTE CACHE FOR SCRIPT "{script.name}" with {num_variants} model variants ====')
+            
+            async_compute_tasks = []            
+            for hash,param_values in script.iterate_possible_model_params_dicts():
+                # NOTE: hash is omitted
+                async_compute_tasks.append(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
         
-        async_compute_tasks = []            
-        for hash,param_values in script.iterate_possible_model_params_dicts():
-            # NOTE: hash is omitted
-            async_compute_tasks.append(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
-    
-        loop = asyncio.get_event_loop()
-        #tasks = asyncio.gather(*async_compute_tasks)
-        tasks = asyncio.wait(async_compute_tasks) # use wait instead of gather because its easier
-        loop.run_until_complete(tasks) # results are already handled
-        loop.close()
+            loop = asyncio.get_event_loop()
+            #tasks = asyncio.gather(*async_compute_tasks)
+            tasks = asyncio.wait(async_compute_tasks) # use wait instead of gather because its easier
+            loop.run_until_complete(tasks) # results are already handled
+            loop.close()
 
-        return compute_batch_id
+            return compute_batch_id
     
     async def compute_script_cache_async(self, script:CadScript, compute_batch_id:str, on_done:Callable[[str],bool]=None) -> str:
         """
