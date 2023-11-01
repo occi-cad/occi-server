@@ -35,7 +35,7 @@ from kombu import Exchange, Queue
 class ModelRequestHandler():
 
     #### SETTINGS ####
-    WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 3
+    WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 10 # in seconds
     REDIRECTING_COMPUTING_STATE = 'job'
     CAD_SCRIPT_ENGINES = { 'cadquery' : 'OCCI_CADQUERY', 
                            'archiyou' : 'OCCI_ARCHIYOU' } # execution engines and their flags in .env for turning on or off
