@@ -32,7 +32,7 @@ class ModelRequest(BaseModel):
     quality: ModelQuality = 'high' # TODO
     batch_id: str = None # some id to group requests 
     batch_on_end_action: ComputeBatchEndAction = 'publish'
-    settings: dict = {} # specific options for execution engine
+    settings:dict = {} # specific options for execution engine
     
 
     def get_param_query_string(self) -> str:

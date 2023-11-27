@@ -139,9 +139,17 @@ class Admin:
 
         # Do the needed checks around unique namespaces
         self._check_publish_request(req) # will raise Error
+
         # Save the script in OCCI library on disk
         if self.api_generator.library.add_script(req.script) is False:
             raise HTTPException(status_code=400, detail='Cannot publish script. It already exists. Try another name or version tag!')
+        
+        # Add endpoint for this script version
+        self.api_generator._generate_version_endpoint(script=req.script)
+        # IMPORTANT: this probably does not yet overwrite existing route. See: https://github.com/tiangolo/fastapi/discussions/8489
+        # A restart of the server - or API is still required here!
+        self.api_generator._generate_default_version_endpoint(script=req.script) 
+
         
         # If needed (and possible) start pre-calculation of models into cache asynchronously
         if not req.pre_calculate:

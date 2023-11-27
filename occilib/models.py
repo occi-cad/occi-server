@@ -116,6 +116,7 @@ class ModelResult(BaseModel):
     task_id:str = None # set id of Celery task here
     request_id:str = None
     models:dict = {} # TODO Output models by format
+    files:dict = {} # Any files the worker wants to return by { "{name}.{ext}" : {data:base64} }
     errors:List[Any] = []# TODO
     messages:List[Any] = [] # TODO
     tables:Any = [] # TODO
