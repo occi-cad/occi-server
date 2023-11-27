@@ -591,7 +591,7 @@ class CadLibrary:
             # place total JSON response in cache
             Path(result_cache_dir).mkdir(parents=True, exist_ok=True)
 
-            # save results to file
+            # save results to file: models
             if len(script_result.results.models.keys()) > 0: # only when some models as results
                 with open(f'{result_cache_dir}/result.json', 'w') as f:
                     f.write(script_result_json)
@@ -610,6 +610,14 @@ class CadLibrary:
                 self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model variant cached in directory: {result_cache_dir}')
             else:
                 self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
+
+            # worker can also return files in result.files = { {{file_name.ext}} : {{base64}} }. Save those to disk
+            if type(script_result.results.files) is dict:
+                for filename,data in script_result.results.files.items():
+                    with open(f'{result_cache_dir}/{filename}', 'wb') as f:
+                        data_binary = base64.b64decode(data) # decode base64
+                        f.write(data_binary)
+                        self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return: Saved file "{filename}" to disk in dir "{result_cache_dir}"')
 
         # clean compute files in script dir
         self.remove_compute_files(dir=result_cache_dir)
