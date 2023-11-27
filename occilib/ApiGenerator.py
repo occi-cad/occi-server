@@ -169,10 +169,6 @@ class ApiGenerator:
             req.script_special_requested_entity = filename # filename with extension!
             return await self.request_handler.handle(req)
 
-        
-
-        
-
         self.logger.info(f'=> Generated API endpoints at: "{script.org}/{script.name}/{script.version}"')
 
         return True
