@@ -177,9 +177,8 @@ class ModelRequestHandler():
         # Based on settings in the request we return different things
         if script_result:
             if script_result.results.success is True:
-                
                 if new:
-                    return self.library.checkin_script_result_in_cache(script_result)
+                    self.library.checkin_script_result_in_cache(script_result)
                 
                 # continue with see what we need to return based on script_result.request
                 # the user requested a model or the full result
@@ -257,8 +256,6 @@ class ModelRequestHandler():
 
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
-
-        print(requested_script.hash() )
 
         if self.library.is_cached(requested_script):
 
