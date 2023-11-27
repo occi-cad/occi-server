@@ -182,8 +182,6 @@ class ModelRequestHandler():
                     return self.library.checkin_script_result_in_cache(script_result)
                 
                 # continue with see what we need to return based on script_result.request
-                print('HIERO')
-                print(req.script_special_requested_entity)
                 # the user requested a model or the full result
                 if req.script_special_requested_entity is None:
                     # API user requested a full CadScriptResult response
@@ -204,7 +202,7 @@ class ModelRequestHandler():
                         return filenames
                     # a file.ext in req.script_special_requested_entity
                     elif re.match('[^\.]+\.[^$]+$', req.script_special_requested_entity): 
-                        if  script_result.request.script_special_requested_entity in filenames:
+                        if req.script_special_requested_entity in filenames: # if indeed that file exists
                             file_data_base64 = script_result.results.files.get(req.script_special_requested_entity)
                             file_data_binary = base64.b64decode(file_data_base64)
                             with tempfile.NamedTemporaryFile(
