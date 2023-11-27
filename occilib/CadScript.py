@@ -320,7 +320,7 @@ class CadScriptResult(CadScriptRequest):
                 model_content = base64.b64decode(model_content) # decode base64 string
 
             with tempfile.NamedTemporaryFile(
-                    mode=FORMAT_TO_WRITE(format, 'wb'),
+                    mode=FORMAT_TO_WRITE.get(format, 'wb'),
                     delete=False, 
                     suffix=f".{format}") as f:
                 
