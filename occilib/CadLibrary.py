@@ -889,7 +889,7 @@ class CadLibrary:
         '''
             Add incoming script version to existing internal data structures
         '''
-        if len(list(filter(lambda s: s.name == script.name, self.scripts))) == 0: # make sure it does not exist already
+        if len(list(filter(lambda s: s.org == script.org and s.name == script.name and s.version == script.version, self.scripts))) == 0: # make sure it does not exist already
             self.scripts.append(script)
         scripts_by_namespace = list(filter(lambda s: s.name == script.name, self.scripts))
         scripts_by_namespace_sorted = sorted(scripts_by_namespace, key=lambda s:  Version.parse(s.version, optional_minor_and_patch=True)) 
