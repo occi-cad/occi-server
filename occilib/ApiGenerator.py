@@ -96,6 +96,7 @@ class ApiGenerator:
             req.script_special_requested_entity = 'versions'
             return await self.request_handler.handle(req)
         
+        
         self.logger.info(f'=> Generated default API endpoint: "{script.org}/{script.name}" and /versions')
 
 
@@ -119,11 +120,23 @@ class ApiGenerator:
             
             return await self.request_handler.handle(req)
         
+        # Add POST method to allow more refined settings 
+        @api.post(f'/{script.org}/{script.name}/{script.version}', tags=[script.name])
+        async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
+            req.script_org = script.org
+            req.script_name = script.name
+            req.script_version = script.version
+            return await self.request_handler.handle(req)
+        
+        ''' These are convenience GET routes that give special information on the specific script version 
+            Notice that this uses the script_special_requested_entity parameter that can be directly used in the POST route
+        '''
+        
         # sometimes its handy to just get the script
         @api.get(f'/{script.org}/{script.name}/{script.version}/script', tags=[script.name])
         async def get_script():
             return script
-    
+
         @api.get(f'/{script.org}/{script.name}/{script.version}/params', tags=[script.name])
         async def get_model_get_params(req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
@@ -139,14 +152,25 @@ class ApiGenerator:
             req.script_version = script.version
             req.script_special_requested_entity = 'presets'
             return await self.request_handler.handle(req)
-
-        # Add POST method to allow more refined settings 
-        @api.post(f'/{script.org}/{script.name}/{script.version}', tags=[script.name])
-        async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
+        
+        @api.get(f'/{script.org}/{script.name}/{script.version}/files', tags=[script.name])
+        async def get_model_files(req:SpecificEndpointInputModel=Depends()):
             req.script_org = script.org
             req.script_name = script.name
             req.script_version = script.version
+            req.script_special_requested_entity = 'files'
             return await self.request_handler.handle(req)
+        
+        @api.get(f'/{script.org}/{script.name}/{script.version}/files/' + '{filename}', tags=[script.name])
+        async def get_model_file(filename, req:SpecificEndpointInputModel=Depends()):
+            req.script_org = script.org
+            req.script_name = script.name
+            req.script_version = script.version
+            req.script_special_requested_entity = filename # filename with extension!
+            return await self.request_handler.handle(req)
+
+        
+
         
 
         self.logger.info(f'=> Generated API endpoints at: "{script.org}/{script.name}/{script.version}"')
