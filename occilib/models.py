@@ -92,7 +92,7 @@ class ModelRequestInput(BaseModel):
     script_org:str = None # always lowercase
     script_name:str = None # always lowercase
     script_version:str = None
-    script_special_requested_entity:str = None # requested entity: None=script, versions, params, presets
+    script_special_requested_entity:str = None # requested entity: None=script, versions, params, presets, {{file.ext}}
     format: ModelFormat = 'step'
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
     settings: dict = {} # more refined settings (maybe cad engine specific) 
@@ -104,10 +104,22 @@ class ModelRequestInput(BaseModel):
 
         query_key_vals = []
         for k,v in self.dict().items():
-            if 'script_' not in k: # a hacky way to avoid the internal properties
+            if 'script_' not in k and type(v) is not dict: # a hacky way to avoid the internal properties
                 query_key_vals.append(f'{k}={v}')
         
-        return '?' + '&'.join(query_key_vals)
+        return '?' + '&'.join(query_key_vals) if len(query_key_vals) else ''
+    
+    def get_query_string(self) -> str:
+        ''' Get query string of this request
+            Includes params and settings like script_special_requested_entity
+        '''
+        pq = self.get_param_query_string()
+        manual_query_string = f'script_special_requested_entity={self.script_special_requested_entity}'
+        if len(pq) > 0:
+            return pq + f'&{manual_query_string}'
+        else:
+            return  f'?{manual_query_string}'
+
 
 
 class ModelResult(BaseModel):

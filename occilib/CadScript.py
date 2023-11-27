@@ -10,6 +10,9 @@
 from datetime import datetime
 from typing import List, Any, Dict, Tuple, Iterator, Optional
 from pydantic import BaseModel, validator
+import tempfile
+from fastapi.responses import FileResponse
+
 import hashlib
 import base64
 import json
@@ -306,6 +309,24 @@ class CadScriptResult(CadScriptRequest):
     """
     results:ModelResult = ModelResult()
     
+    def get_model_file_response(self, format:ModelFormat) -> FileResponse:
+
+        FORMAT_TO_WRITE = { 'stl' : 'wb', 'gltf' : 'wb', 'step' : 'w' } 
+        model_content = self.results.models.get(format) # either text or text base64
+
+        if model_content:
+            # parse base64 encoded binary to bytes
+            if FORMAT_TO_WRITE.get(format, 'wb') == 'wb':
+                model_content = base64.b64decode(model_content) # decode base64 string
+
+            with tempfile.NamedTemporaryFile(
+                    mode=FORMAT_TO_WRITE(format, 'wb'),
+                    delete=False, 
+                    suffix=f".{format}") as f:
+                
+                f.write(model_content)
+                output_model_filename = f'{self.name}-{self.hash()}.{format}'
+                return FileResponse(f.name, filename=output_model_filename)
 
 
 

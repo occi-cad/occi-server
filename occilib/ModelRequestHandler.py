@@ -9,7 +9,11 @@
 """
 
 import os
+import re
 import logging
+import base64
+import tempfile
+
 from fastapi import HTTPException
 from fastapi.responses import Response, RedirectResponse, JSONResponse, FileResponse
 
@@ -166,19 +170,57 @@ class ModelRequestHandler():
     def script_engine_has_workers(self, requested_script:CadScriptRequest) -> bool:
 
         return requested_script.cad_engine in self.available_scriptengine_workers
+    
 
-
-    def handle_script_result(self, script_result:CadScriptResult) -> Response|FileResponse:
-        # we got a compute result in time to respond directly to the API client
+    def handle_requested_script_result(self, req:ModelRequestInput, script_result:CadScriptResult, new:bool=False) -> Response|FileResponse:
+        # We got a compute result in time to respond directly to the API client
+        # Based on settings in the request we return different things
         if script_result:
             if script_result.results.success is True:
-                return self.library.checkin_script_result_in_cache_and_return(script_result)
+                
+                if new:
+                    return self.library.checkin_script_result_in_cache(script_result)
+                
+                # continue with see what we need to return based on script_result.request
+                print('HIERO')
+                print(req.script_special_requested_entity)
+                # the user requested a model or the full result
+                if req.script_special_requested_entity is None:
+                    # API user requested a full CadScriptResult response
+                    if req.output == 'full':
+                        # only allow requested format to be outputted
+                        script_result = self.library._apply_single_model_format(script_result)
+                        return Response(content=script_result.json(), media_type="application/json") # don't parse the content, just output
+                    else: # output = model
+                        # only a specific format model as output 
+                        # we skip loading the result.json and serve the model file data directly
+                        return script_result.get_model_file_response(format=req.format)
+                        
+                # special entities from result
+                else:
+                    # request files or specific files of this result
+                    filenames = list((script_result.results.files or {}).keys())
+                    if req.script_special_requested_entity == 'files':
+                        return filenames
+                    # a file.ext in req.script_special_requested_entity
+                    elif re.match('[^\.]+\.[^$]+$', req.script_special_requested_entity): 
+                        if  script_result.request.script_special_requested_entity in filenames:
+                            file_data_base64 = script_result.results.files.get(req.script_special_requested_entity)
+                            file_data_binary = base64.b64decode(file_data_base64)
+                            with tempfile.NamedTemporaryFile(
+                                                mode='wb', # for now only binary files!
+                                                delete=False, 
+                                                suffix=f".{format}") as f:
+                                f.write(file_data_binary)
+                                return FileResponse(f.name, filename=req.script_special_requested_entity)
+
+
             else:
                 errors_str = ','.join(script_result.results.errors)
                 raise HTTPException(status_code=404, 
                     detail=f"""Error executing the script '{script_result.name}':'{errors_str}'\nPlease notify the OCCI library administrator!""")
         else:
-            self.logger.error('ModelRequestHandler::handle_script_result: No script result given!')
+            self.logger.error('ModelRequestHandler::handle_requested_script_result: No script result given!')
 
 
     async def handle(self, req:ModelRequestInput) -> RedirectResponse | JSONResponse | FileResponse:
@@ -200,34 +242,32 @@ class ModelRequestHandler():
 
         script = self.library.get_script_request(org=req.script_org, name=req.script_name) # this gets the latest version
 
-        # special entity request (special_requested_entity)
+        # special entity request that don't need calculation: versions, params, presets
         if req.script_special_requested_entity is not None:
-            # check if script exists
-            if script:
-                if req.script_special_requested_entity == 'versions':
-                    return self.library.get_script_versions(script)
-                elif req.script_special_requested_entity == 'params':
-                    return script.params
-                elif req.script_special_requested_entity == 'presets':
-                    return script.param_presets
+            # properties of general script
+            if req.script_special_requested_entity == 'versions':
+                return self.library.get_script_versions(script) if script else None
+            elif req.script_special_requested_entity == 'params':
+                return script.params if script else None
+            elif req.script_special_requested_entity == 'presets':
+                return script.param_presets if script else None
+            # For files or a specific file: see below
 
         # always make sure we have a version, redirect if needed
         if req.script_version is None:
-            return RedirectResponse(f'/{script.namespace}/{script.version}{req.get_param_query_string()}') # return to default version, forward params
+            return RedirectResponse(f'/{script.namespace}/{script.version}{req.get_query_string()}') # return to default version, forward params
 
         requested_script = self._req_to_script_request(req)
         requested_script.hash() # set hash based on params
 
-        if self.library.is_cached(requested_script):
-            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] at ****')
-            # API user requested a full CadScriptResult response
-            if requested_script.request.output == 'full':
-                cached_script = self.library.get_cached_script(requested_script)
-                return cached_script
-            else:
-                # only a specific format model as output (we skip loading the result.json and serve the model file directly)
-                return self.library.get_cached_model(requested_script)
+        print(requested_script.hash() )
 
+        if self.library.is_cached(requested_script):
+
+            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] ****')
+            cached_script_result = self.library.get_cached_script(requested_script)
+            return self.handle_requested_script_result(req, cached_script_result, new=False)
+            
         else:
             # no cache - but already computing?
             computing_job = self.library.check_script_model_computing_job(script=requested_script, script_instance_hash=requested_script.hash())
@@ -242,21 +282,21 @@ class ModelRequestHandler():
                         raise HTTPException(500, detail=f'No workers available for cad script engine "{requested_script.cad_engine}". Try again or report to the administrator!') # raise http exception to give server error
 
                     task:AsyncResult = self.get_celery_task_method(requested_script).apply_async(args=[], kwargs={ 'script' : requested_script.json() })
-                    result_or_timeout = self.start_compute_wait_for_result_or_redirect(task)
+                    result_or_timeout = self.start_compute_wait_for_result_or_redirect(req, task)
 
                     # wait time is over before compute could finish:
                     if result_or_timeout is None:
                         # no result
                         return self.go_to_computing_job_url(requested_script, task.id)
                     else:
-                        # check and handle 
-                       return self.handle_script_result(result_or_timeout)
+                        # result in time! 
+                       return self.handle_requested_script_result(req, result_or_timeout, new=True)
                 else:
                     # local debug
                     self.logger.warn('ModelRequestHandler::handle(): Compute request without celery connection. You are probably debugging?')
                     return requested_script
 
-    def start_compute_wait_for_result_or_redirect(self, task:AsyncResult, wait_time:int=None) -> CadScriptResult: # time in seconds
+    def start_compute_wait_for_result_or_redirect(self, req:ModelRequestInput, task:AsyncResult, wait_time:int=None) -> CadScriptResult: # time in seconds
         """
             Async wait for a given number of seconds T
             if t < T return compute result directly to API client 
@@ -284,12 +324,12 @@ class ModelRequestHandler():
             IMPORTANT: once a long compute (compute_and_handle_result) is slower than wait it does not continue any more (for some reason)
             Start another async task to monitor the result and handle it
         '''
-        async def monitor_for_celery_result(task_id) -> CadScriptResult:
+        async def monitor_for_celery_result(req:ModelRequestInput,task_id) -> CadScriptResult:
             celery_task_result = AsyncResult(task_id)
             while not celery_task_result.ready():
                 await asyncio.sleep(1)
             result_dict = celery_task_result.result
-            self.handle_script_result(CadScriptResult(**result_dict)) # convert to CadScriptResult
+            self.handle_requested_script_result(req, CadScriptResult(**result_dict), new=True) # convert to CadScriptResult
             return True
 
         loop = asyncio.get_running_loop()
@@ -326,7 +366,7 @@ class ModelRequestHandler():
 
             # wait for celery compute task with seperate coroutine
             if not coro_is_wait(pending_coro):
-                loop.create_task(monitor_for_celery_result(task.id))
+                loop.create_task(monitor_for_celery_result(req, task.id))
         
         if result is not False:
             script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance

@@ -580,7 +580,7 @@ class CadLibrary:
 
         return True
 
-    def checkin_script_result_in_cache_and_return(self, script_result:CadScriptResult) -> Response|FileResponse: # return a raw Starlette/FastAPI response with json content
+    def checkin_script_result_in_cache(self, script_result:CadScriptResult) -> CadScriptResult: 
 
         script_result_json = script_result.json()
 
@@ -607,9 +607,9 @@ class CadLibrary:
                         gltf_binary = base64.b64decode(script_result.results.models['gltf']) # decode base64
                         f.write(gltf_binary)
 
-                self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return(): Model variant cached in directory: {result_cache_dir}')
+                self.logger.info(f'CadLibrary::checkin_script_result_in_cache(): Model variant cached in directory: {result_cache_dir}')
             else:
-                self.logger.error('CadLibrary::checkin_script_result_in_cache_and_return: Could not get valid result models. Skipped setting in cache!')
+                self.logger.error('CadLibrary::checkin_script_result_in_cache: Could not get valid result models. Skipped setting in cache!')
 
             # worker can also return files in result.files = { {{file_name.ext}} : {{base64}} }. Save those to disk
             if type(script_result.results.files) is dict:
@@ -617,20 +617,23 @@ class CadLibrary:
                     with open(f'{result_cache_dir}/{filename}', 'wb') as f:
                         data_binary = base64.b64decode(data) # decode base64
                         f.write(data_binary)
-                        self.logger.info(f'CadLibrary::checkin_script_result_in_cache_and_return: Saved file "{filename}" to disk in dir "{result_cache_dir}"')
+                        self.logger.info(f'CadLibrary::checkin_script_result_in_cache: Saved file "{filename}" to disk in dir "{result_cache_dir}"')
 
         # clean compute files in script dir
         self.remove_compute_files(dir=result_cache_dir)
 
         # only allow requested format to be outputted
-        script_result = self._apply_single_model_format(script_result)
+        # script_result = self._apply_single_model_format(script_result)
 
         # manage batch stats
         if script_result.request.batch_id is not None:
             self._compute_batch_stats[script_result.request.batch_id].done += 1 # increment
             self._compute_batch_stats[script_result.request.batch_id].duration += script_result.results.duration # increment duration in ms
 
+        return script_result
+
         # Depending on request.format and request.output return either full json or file
+        '''
         if script_result.request.output == 'full':
             return Response(content=script_result.json(), media_type="application/json") # don't parse the content, just output
         else:
@@ -654,6 +657,7 @@ class CadLibrary:
                 else:
                     return { 'status' : 'error', 'message' : f'No valid output model in {format}. Please contact the administrator!' }
 
+        '''
         
 
     #### CACHE PRE CALCULATION AND ADMIN ####
@@ -669,7 +673,7 @@ class CadLibrary:
         script_request.request.settings = script_request.request.settings | (script.cad_engine_config or {})
         script_result = await self.request_handler.compute_script_request(script_request)
         
-        self.checkin_script_result_in_cache_and_return(script_result)
+        self.checkin_script_result_in_cache(script_result)
 
         batch_id = script_result.request.batch_id
 
