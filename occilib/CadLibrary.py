@@ -657,6 +657,8 @@ class CadLibrary:
         """
     
         script_request = self._make_cache_compute_script_request(script, param_values, batch_id)
+        # copy over general publish information from cad_engine_config to request.settings
+        script_request.request.settings = script_request.request.settings | (script.cad_engine_config or {})
         script_result = await self.request_handler.compute_script_request(script_request)
         
         self.checkin_script_result_in_cache_and_return(script_result)
@@ -773,6 +775,7 @@ class CadLibrary:
 
             for hash,param_values in script.iterate_possible_model_params_dicts():
                 # TODO: should we await the results here instead of creating the tasks concurrently - it might block the event loop
+                # This function also copies general publish settings from script.cad_engine_config to script.request
                 task = asyncio.create_task(self._submit_and_handle_compute_script_task(script, param_values,compute_batch_id))
                 # IMPORTANT: keep references otherwise GC might remove tasks. See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
                 self._background_async_tasks.add(task)

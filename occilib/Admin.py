@@ -150,11 +150,9 @@ class Admin:
         # A restart of the server - or API is still required here!
         self.api_generator._generate_default_version_endpoint(script=req.script) 
 
-        
-        # If needed (and possible) start pre-calculation of models into cache asynchronously
-        if not req.pre_calculate:
-            # no compute needed
-            # TODO: test the script in some ways?
+        # If request (and possible) start pre-calculation of models into cache asynchronously
+        if not req.pre_calculate or not req.script.is_cachable():
+            # no compute requested (or available)
             return PublishJob(script=req.script, status='success')
         else:
             # lets do a pre-caching compute
