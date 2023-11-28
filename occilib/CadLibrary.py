@@ -406,8 +406,47 @@ class CadLibrary:
     #### BASIC CACHE OPERATIONS ####
 
     def is_cached(self, script:CadScriptRequest) -> bool: 
+        '''
+            Check if a result of a CadScriptRequest is already on disk
+            and has the requested special results in the result.json
+            We use map per engine that maps settings in CadScriptRequest.request.settings
+        '''
+        CAD_ENGINE_REQUEST_SETTINGS_TO_RESULTS = {
+            'cadquery' : {},
+            'archiyou' : {
+                # values in request.settings.docs need to be in CadScriptResult.results.files with same value as given in map_value
+                'docs' : { 'results': 'files', 'check_value' : lambda settings,results: all( item in [v + '.pdf' for v in settings] for item in results.keys()) }  
+            }
+        }
 
-        return self._get_cached_script_file_path(script) is not None 
+        cad_script_result = self.get_cached_script(script)
+        if cad_script_result is None:
+            return False
+        
+        # check if requested results are present
+        if not script.cad_engine:
+            self.logger.error('''CadLibrary::is_cached(): No cad_engine given, so can't check for specially requested results in CadScriptResult!''')
+            return True
+        
+        if script.request.settings is None:
+            # No settings given, so we take it the cached result is good enough
+            return True
+        
+        script_request_checks = CAD_ENGINE_REQUEST_SETTINGS_TO_RESULTS.get(script.cad_engine)
+
+        for setting_entry, check in script_request_checks.items():
+            requested_settings = script.request.settings.get(setting_entry)
+            if requested_settings is None: 
+                self.logger.info(f'''CadLibrary::is_cached(): No specific settings given in "CadScriptRequest.request.settings.{setting_entry}". Returned True''')
+                return True # no special settings given
+            results_at = getattr(cad_script_result.results, (check['results']))
+            # run value check that compares settings with results
+            if check['check_value'](requested_settings, results_at) is False:
+                
+                self.logger.info(f'''CadLibrary::is_cached(): Requested settings in "{setting_entry}" don't match with results in "{check['results']}". Returned False''')
+                return False
+                        
+        return True
 
         
     def _get_cached_script_file_path(self, script:CadScriptRequest) -> str:
@@ -632,32 +671,6 @@ class CadLibrary:
 
         return script_result
 
-        # Depending on request.format and request.output return either full json or file
-        '''
-        if script_result.request.output == 'full':
-            return Response(content=script_result.json(), media_type="application/json") # don't parse the content, just output
-        else:
-            output_model_format = script_result.request.format
-            output_model_filename = f'{script_result.name}-{script_result.hash()}.{script_result.request.format}'
-            if script_result.is_cachable(): 
-                # there is cache file present
-                return FileResponse(f'{result_cache_dir}/result.{output_model_format}', filename=output_model_filename)
-            else:
-                FORMAT_TO_WRITE = { 'stl' : 'wb', 'gltf' : 'wb', 'step' : 'w' } 
-                model_content = script_result.results.models.get(script_result.request.format)
-
-                if model_content:
-                    # parse base64 encoded binary to bytes
-                    if FORMAT_TO_WRITE[output_model_format] == 'wb':
-                        model_content = base64.b64decode(model_content)
-
-                    with tempfile.NamedTemporaryFile(mode=FORMAT_TO_WRITE[output_model_format], delete=False, suffix=f".{output_model_format}") as f:
-                        f.write(model_content)
-                        return FileResponse(f.name, filename=output_model_filename)
-                else:
-                    return { 'status' : 'error', 'message' : f'No valid output model in {format}. Please contact the administrator!' }
-
-        '''
         
 
     #### CACHE PRE CALCULATION AND ADMIN ####
