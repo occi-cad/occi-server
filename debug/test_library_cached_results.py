@@ -44,6 +44,9 @@ script_request = CadScriptRequest(**{
 	"public_code": False,
 	"code": "// Archiyou 0.20\r\n\r\nr = rect(100,$SIZE)\r\n\r\nr.select('E||right').dimension({ offset: 30});\r\nr.select('E||back').dimension({ offset: 10});\r\n\r\nd = doc\r\n    .name('spec')\r\n    .units('mm')\r\n    .page('test')\r\n    .size('A4')\r\n    .padding('1cm')\r\n    .orientation('landscape') // default: landscape\r\n    // Text\r\n    .text(\r\n        'Text left top 5mm', \r\n        { 'size' : '5mm' }\r\n    )\r\n    // Text aligned\r\n    .text(\r\n        'Text in middle 10mm', \r\n        { 'size' : '10mm' }\r\n    ) \r\n    .position(0.5,0.5)\r\n    // Image from URL 5x5cm aligned right bottom\r\n    .image('https://oscity.nl/static/img/manifest0.png', \r\n        { fit: 'contain'})\r\n    .width('5cm')\r\n    .height('5cm')\r\n    .position(1,0)\r\n    .pivot(1,0)\r\n    // SVG Image Top right 10x5cm with SVG styles preserved and scaled\r\n    .image(\r\n        'https://cms.archiyou.com/uploads/test_9bf0f065ed.svg', \r\n        { fit: 'contain',  align: ['right','center'] }\r\n    )\r\n    .width('10cm')\r\n    .height('5cm')\r\n    .pivot([1,1])\r\n    .position([1,1])\r\n    // Shapes with dimension line\r\n    .view('rect')\r\n    .shapes(r)\r\n    .width('10cm')\r\n    .height('5cm')\r\n    .position(0,0)\r\n    .pivot(0,0)\r\n    // Table directly without Calc\r\n    .table([\r\n            { field1: 'R0V1', field2: 'R0V2' },\r\n            { field1: 'R1V1', field2: 'R2V2' }\r\n        ])\r\n    .position(0,0.5);\r\n    \r\n",
 	"cad_engine": "archiyou",
+    "cad_engine_config" : {
+        "docs" : ['spec']
+    },
 	"cad_engine_version": None,
 	"secret_edit_token": None,
 	"meta": {},
@@ -60,7 +63,9 @@ script_request = CadScriptRequest(**{
 		"batch_id": None,
 		"batch_on_end_action": "publish",
 		"settings": {
-            "docs": ["spec"]
+            "docs": ['spec'] # is_cached:True
+            #"docs": False, # is_cached:True
+            #"docs": ['manual'] # is_cached:True
         }
 	}
 })

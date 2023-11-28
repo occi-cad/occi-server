@@ -414,8 +414,19 @@ class CadLibrary:
         CAD_ENGINE_REQUEST_SETTINGS_TO_RESULTS = {
             'cadquery' : {},
             'archiyou' : {
-                # values in request.settings.docs need to be in CadScriptResult.results.files with same value as given in map_value
-                'docs' : { 'results': 'files', 'check_value' : lambda settings,results: all( item in [v + '.pdf' for v in settings] for item in results.keys()) }  
+                # values in request.settings.docs need to be in CadScriptResult.results.files with same value as given in check_value
+                # pre_check can change settings value
+                'docs' : { 
+                            'results': 'files', 
+                            # pre_check makes sure we always have a checked list of docs
+                            'pre_check' : lambda requested_script, settings_entry, settings: 
+                                            (requested_script.cad_engine_config.get(settings_entry)) or [] if settings is True 
+                                            else 
+                                                # this checks if given doc actually exists
+                                                list(filter(lambda doc_entry: doc_entry in (requested_script.cad_engine_config or {}).get(settings_entry), settings)) 
+                                                if type(settings) is list
+                                                else [],
+                            'check_value' : lambda settings,results: all( item in [v + '.pdf' for v in settings] for item in results.keys()) if (type(settings) is list and len(settings)) else True }  
             }
         }
 
@@ -436,6 +447,9 @@ class CadLibrary:
 
         for setting_entry, check in script_request_checks.items():
             requested_settings = script.request.settings.get(setting_entry)
+            if check['pre_check']:
+                requested_settings = check['pre_check'](script, setting_entry, requested_settings)
+                self.logger.info(f'''CadLibrary::is_cached(): Precheck settings update to: {requested_settings}''')
             if requested_settings is None: 
                 self.logger.info(f'''CadLibrary::is_cached(): No specific settings given in "CadScriptRequest.request.settings.{setting_entry}". Returned True''')
                 return True # no special settings given
