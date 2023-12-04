@@ -128,10 +128,12 @@ class ModelResult(BaseModel):
     task_id:str = None # set id of Celery task here
     request_id:str = None
     models:dict = {} # TODO Output models by format
+    metrics:dict = {} # raw metric data by metric name
+    tables:dict = {} # raw table data by table name
+    docs:dict = {} # raw doc data by name of doc
     files:dict = {} # Any files the worker wants to return by { "{name}.{ext}" : {data:base64} }
     errors:List[Any] = []# TODO
     messages:List[Any] = [] # TODO
-    tables:Any = [] # TODO
     duration:int = None # in ms
 
 class SearchQueryInput(BaseModel):

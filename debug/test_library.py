@@ -90,4 +90,5 @@ print(req.script.dict())
 # print(lib.latest_scripts)
 
 #### ALL VERSIONS OF SCRIPT ####
-print(lib.script_versions)
+#print(lib.script_versions)
+
