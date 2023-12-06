@@ -364,7 +364,10 @@ class ModelRequestHandler():
                 loop.create_task(monitor_for_celery_result(req, task.id))
         
         if result is not False:
-            script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
+            try: 
+                script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
+            except Exception as e:
+                self.logger.error(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect(). Mailformed result: {script_result.dict()}: ERROR: {e}')
         else:
             script_result = None
 
