@@ -120,9 +120,12 @@ class ApiGenerator:
             
             return await self.request_handler.handle(req)
         
-        # Add POST method to allow more refined settings 
+        # Add POST method to allow more refined settings
+        # IMPORTANT: We still need flat params here for SpecificEndpointInputModel like in GET
+        # TODO: Make this more logic with a seperate params
         @api.post(f'/{script.org}/{script.name}/{script.version}', tags=[script.name])
         async def get_model_post(req:SpecificEndpointInputModel): # NOTE: POST needs no Depends()
+            # overwrite base script data coming from request 
             req.script_org = script.org
             req.script_name = script.name
             req.script_version = script.version

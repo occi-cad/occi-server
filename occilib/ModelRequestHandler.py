@@ -258,8 +258,7 @@ class ModelRequestHandler():
         requested_script.hash() # set hash based on params
 
         if self.library.is_cached(requested_script):
-
-            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST [format="{req.format}" output="{req.output}"] ****')
+            self.logger.info(f'**** {requested_script.name}: CACHE HIT FOR REQUEST script "{req.script_name}" - model hash "{requested_script.hash()}" [format="{req.format}" output="{req.output}"] ****')
             cached_script_result = self.library.get_cached_script(requested_script)
             return self.handle_requested_script_result(req, cached_script_result, new=False)
             

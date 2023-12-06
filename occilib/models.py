@@ -99,6 +99,7 @@ class ModelRequestInput(BaseModel):
 
     # params:dict = {} # { param_name: value } NOTE: only used now for pre-calculating cache - but can also be used in API later
     # !!! params are added on runtime by name !!!
+    # TODO: introduce params for POST method
 
     def get_param_query_string(self) -> str:
 

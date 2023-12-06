@@ -449,7 +449,7 @@ class CadLibrary:
             requested_settings = script.request.settings.get(setting_entry)
             if check['pre_check']:
                 requested_settings = check['pre_check'](script, setting_entry, requested_settings)
-                self.logger.info(f'''CadLibrary::is_cached(): Precheck settings update to: {requested_settings}''')
+                self.logger.info(f'''CadLibrary::is_cached(): Precheck settings for "{setting_entry}" update to: {requested_settings}''')
             if requested_settings is None: 
                 self.logger.info(f'''CadLibrary::is_cached(): No specific settings given in "CadScriptRequest.request.settings.{setting_entry}". Returned True''')
                 return True # no special settings given
