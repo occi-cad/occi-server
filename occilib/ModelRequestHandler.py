@@ -368,7 +368,7 @@ class ModelRequestHandler():
                 script_result = CadScriptResult(**result) # convert dict result to CadScriptResult instance
             except Exception as e:
                 self.logger.info(result.get('results')['tables'])
-                self.logger.error(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect(). Mailformed result: {result}: ERROR: "{e}"')
+                self.logger.error(f'ModelRequestHandler::start_compute_wait_for_result_or_redirect(). Mailformed ERROR: "{e}"')
         else:
             script_result = None
 
