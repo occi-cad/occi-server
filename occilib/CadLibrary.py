@@ -417,7 +417,7 @@ class CadLibrary:
                 # values in request.settings.docs need to be in CadScriptResult.results.files with same value as given in check_value
                 # pre_check can change settings value
                 'docs' : { 
-                            'results': 'files', 
+                            'results': 'docs', 
                             # pre_check makes sure we always have a checked list of docs
                             'pre_check' : lambda requested_script, settings_entry, settings: 
                                             (requested_script.cad_engine_config.get(settings_entry)) or [] if settings is True 
@@ -426,7 +426,7 @@ class CadLibrary:
                                                 list(filter(lambda doc_entry: doc_entry in (requested_script.cad_engine_config or {}).get(settings_entry), settings)) 
                                                 if type(settings) is list
                                                 else [],
-                            'check_value' : lambda settings,results: all( item in [v + '.pdf' for v in settings] for item in results.keys()) if (type(settings) is list and len(settings)) else True }  
+                            'check_value' : lambda settings,results: all( item in results_at.keys() for item in [v for v in requested_settings]) if (type(settings) is list and len(settings)) else True }  
             }
         }
 
@@ -453,11 +453,15 @@ class CadLibrary:
             if requested_settings is None: 
                 self.logger.info(f'''CadLibrary::is_cached(): No specific settings given in "CadScriptRequest.request.settings.{setting_entry}". Returned True''')
                 return True # no special settings given
+            
             results_at = getattr(cad_script_result.results, (check['results']))
             # run value check that compares settings with results
-            if check['check_value'](requested_settings, results_at) is False:
-                
-                self.logger.info(f'''CadLibrary::is_cached(): Requested settings in "{setting_entry}" don't match with results in "{check['results']}". Returned False''')
+            try:
+                if check['check_value'](requested_settings, results_at) is False:
+                    self.logger.info(f'''CadLibrary::is_cached(): Requested settings in "{setting_entry}" don't match with results in "{check['results']}". Returned False''')
+                    return False
+            except Exception as e:
+                self.logger.error(f'CadLibary::is_cached: Error in check function of "{setting_entry}". Please check settings. Returned False. ERROR: {e}')
                 return False
                         
         return True

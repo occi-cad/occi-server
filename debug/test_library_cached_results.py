@@ -63,9 +63,10 @@ script_request = CadScriptRequest(**{
 		"batch_id": None,
 		"batch_on_end_action": "publish",
 		"settings": {
-            "docs": ['spec'] # is_cached:True
+            #"docs": ['spec'] # is_cached:True
             #"docs": False, # is_cached:True
             #"docs": ['manual'] # is_cached:True
+			"docs" : ['spec'],
         }
 	}
 })
