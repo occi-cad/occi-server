@@ -7,7 +7,7 @@ asgiref
 nest-asyncio
 redis
 cadquery==2.2.0b2
-numpy
+numpy==1.23.1
 whoosh
 semver>=3.0.0rc1
 git+https://github.com/gumyr/cq_warehouse.git#egg=cq_warehouse
