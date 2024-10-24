@@ -23,3 +23,5 @@ RUN pip install -r requirements.txt
 # volumes can be mounted inside the working directory too for on runtime file syncing
 # otherwise the scripts are uploaded to the image on built time
 COPY . .
+# default port of test server
+EXPOSE 8090 
