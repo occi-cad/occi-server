@@ -23,6 +23,7 @@ from datetime import datetime
 import json
 import base64
 import asyncio
+import pathlib
 import tempfile
 import uuid
 
@@ -70,7 +71,9 @@ class CadLibrary:
             Paths are relative to root of the api directory
         """
         self._setup_logger()
+        
         self.path = Path(rel_path).resolve()
+        pathlib.Path(self.path).mkdir(parents=True, exist_ok=True) # make path if not present
 
         if '.json' in rel_path:
             self._load_scripts_json(rel_path)
