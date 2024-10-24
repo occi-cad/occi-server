@@ -9,7 +9,7 @@ services:
     env_file:   
       - ./.env 
     ports:
-      - "8090:8000" # same as local dev server for now
+      - "8090:8090" # outside:inside
     volumes:
       - .:/occi
     depends_on:
