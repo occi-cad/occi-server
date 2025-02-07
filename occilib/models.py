@@ -97,6 +97,7 @@ class ModelRequestInput(BaseModel):
     format: ModelFormat = 'gltf' # TODO: check what is available
     output:RequestResultFormat = 'model' # The way to output. Either just a model (default) or the full CadScriptResult with the specific format
     no_cache:bool = False # cache by default
+    wait:bool = False # wait for result (don't redirect to task)
     settings:dict = {} # more refined settings (maybe cad engine specific)
 
     # NOTE: params are added on runtime by name

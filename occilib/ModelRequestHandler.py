@@ -40,6 +40,7 @@ class ModelRequestHandler():
 
     #### SETTINGS ####
     WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT = 30 # in seconds
+    WAIT_FOR_COMPUTE_RESULT_DONT_WAIT_MAX = 5*60 # in seconds - always have some max to avoid unending tasks
     REDIRECTING_COMPUTING_STATE = 'job'
     CAD_SCRIPT_ENGINES = { 'cadquery' : 'OCCI_CADQUERY', 
                            'archiyou' : 'OCCI_ARCHIYOU' } # execution engines and their flags in .env for turning on or off
@@ -303,7 +304,8 @@ class ModelRequestHandler():
             inspired by: https://stackoverflow.com/questions/53967281/what-would-be-promise-race-equivalent-in-python-asynchronous-code
         """
 
-        wait_time = wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT
+        # If wait, we wait a long time (as set in WAIT_FOR_COMPUTE_RESULT_DONT_WAIT_MAX)
+        wait_time = (wait_time or self.WAIT_FOR_COMPUTE_RESULT_UNTIL_REDIRECT) if req.wait is False else self.WAIT_FOR_COMPUTE_RESULT_DONT_WAIT_MAX
 
         def coro_is_wait(coro):
             return '.wait' in str(coro) # TODO: not really robust, make this better
