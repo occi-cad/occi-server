@@ -16,8 +16,15 @@ from dotenv import dotenv_values
 CONFIG = dotenv_values()  
 
 celery = Celery(__name__) # celery app
-celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL') or 'amqp://guest:pass@localhost:5672'
-celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or 'rpc://localhost:5672' # for RMQ as backend see: https://github.com/celery/celery/issues/6384 
+
+celery.conf.broker_url = CONFIG.get('CELERY_BROKER_URL')  or os.environ['CELERY_BROKER_URL']
+celery.conf.result_backend = CONFIG.get('CELERY_RESULT_BACKEND') or os.environ['CELERY_RESULT_BACKEND'] # for RMQ as backend see: https://github.com/celery/celery/issues/6384 
+
+# NOTE: For some weird reason in some contexts the environment variable CELERY_BROKER_URL is overruling these settings
+# TODO: Debug this why
+os.environ['CELERY_BROKER_URL'] = CONFIG.get('CELERY_BROKER_URL') or os.environ['CELERY_BROKER_URL']
+os.environ['CELERY_RESULT_BACKEND'] = CONFIG.get('CELERY_RESULT_BACKEND') or os.environ['CELERY_RESULT_BACKEND']
+
 celery.conf.task_routes = {
             'cadquery.*': { 'queue': 'cadquery', 'routing_key' : 'cadquery' }, # default exchange but different key
             'archiyou.*': { 'queue': 'archiyou', 'routing_key' : 'archiyou' }

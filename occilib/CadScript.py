@@ -37,7 +37,6 @@ class ModelRequest(BaseModel):
     output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
     batch_id: str = None # some id to group requests 
-    batch_on_end_action: ComputeBatchEndAction = 'publish'
     settings:dict = {} # specific options for execution engine
 
     def get_param_query_string(self) -> str:
@@ -198,6 +197,27 @@ class CadScript(BaseModel):
                     return False # directly end because we encountered a non-iterable param (like text)
             
         return True
+    
+
+    def all_values_per_parameter(self, only_params:List[str]=None ) -> Dict[str, List[Any]]:
+
+        only_params = None if type(only_params) is list and len(only_params) == 0 else only_params
+
+        all_values_per_parameter:Dict[str, List[Any]] = {}
+
+        for param in self.params.values():
+            if only_params is None or param.name in only_params:
+                # only use the selected params (if given)
+                if param.enabled:
+                    all_values_per_parameter[param.name] = param.values()
+                else:
+                    # if disabled only use the default value
+                    all_values_per_parameter[param.name] = [param.default]
+            else:
+                # param is not in only_params, so we only add its default value
+                all_values_per_parameter[param.name] = [param.default]
+
+        return all_values_per_parameter
 
     
     def all_possible_model_params_dicts(self) -> Dict[str,dict]: # dict[model_hash, dict]
@@ -254,18 +274,10 @@ class CadScript(BaseModel):
 
         '''
             Iterator over all combinations of param values
+            only_params: include only these parameters, if [] then include all
         '''
 
-        all_values_per_parameter = [] # groups parameter values [ [p1v1,p1v2],[p2v1]]
-        for param in self.params.values():
-            
-            if only_params is None or only_params == [] or (type(only_params) is list and param.name in only_params):
-                # only use the selected params (if given)
-                if param.enabled:
-                    all_values_per_parameter.append(param.values())
-                else:
-                    # if disabled only use the default value
-                    all_values_per_parameter.append([param.default])
+        all_values_per_parameter = self.all_values_per_parameter(only_params=only_params).values()   # groups parameter values [ [p1v1,p1v2],[p2v1]]
 
         for combination in itertools.product(*all_values_per_parameter):
             param_values = {}
@@ -278,7 +290,9 @@ class CadScript(BaseModel):
                 param_set[k] = v
 
             param_set_hash = self.hash(param_set)
+
             yield param_set_hash, param_values
+
 
     def get_num_variants(self, only_params:List[str]=None) -> int|None:
 
@@ -290,17 +304,14 @@ class CadScript(BaseModel):
             returns None if infinite
         '''
 
-        selected_params = self.params if only_params is None else dict((pn, self.params[pn]) for pn in only_params if pn in self.params)
-            
-        num_combinations = 1
-        for param_obj in selected_params.values():
-            if param_obj.enabled:
-                v = param_obj.values()
-                if v is None:
-                    return None
-                num_combinations *= len(v)
+        if self.is_pre_cachable() == False:
+            return None
 
-        return num_combinations
+        num_variants = 1
+        for param_values in self.all_values_per_parameter(only_params=only_params).values():
+            num_variants *= len(param_values)
+
+        return num_variants
 
         
 

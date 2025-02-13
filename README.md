@@ -54,7 +54,7 @@ Just make sure you enable a worker in .env and set the correct Celery url
 
 ```
 OCCI_ARCHIYOU=1
-CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rmq:5672
+CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@{{url}}:5672
 ```
 
 

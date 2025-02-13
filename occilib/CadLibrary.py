@@ -35,6 +35,7 @@ from semver.version import Version
 
 from .CadScript import ModelRequest, CadScript, CadScriptRequest, CadScriptResult, ModelComputeJob
 from .CadLibrarySearch import CadLibrarySearch
+
 from .Param import ParamConfigNumber, ParamConfigText, ParamConfigOptions, ParamConfigBoolean
 from .models import ComputeBatchStats, ScriptCadEngine
 
@@ -733,16 +734,9 @@ class CadLibrary:
     def handle_end_of_batch(self, script:CadScript|CadScriptRequest|CadScriptResult):
         '''
             End of compute batch: do something special basic on settings in script.request
+            
         '''
-        
-        self.logger.info(f'Handle end of batch with batch_on_end_action: "{script.request.batch_on_end_action}"')
-
-        # compute batch is related to publication of a script
-        if script.request.batch_on_end_action == 'publish':
-            r = self.set_script_version_endpoint(script)
-            if r: 
-                self.logger.info(f'Added endpoint for script "{script.org}/{script.name}/{script.version}" after publish pre-calculation')
-                self.reload() # reload scripts to include new script version
+        self.logger.info(f'*** End of batch. For any actions use the callback functions! ***')
 
 
     def set_script_version_endpoint(self, script:CadScript|CadScriptRequest|CadScriptResult) -> bool:
@@ -759,8 +753,9 @@ class CadLibrary:
             If started compute return batch_id
         '''
         
-        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
-        self.request_handler = ModelRequestHandler(library=self)
+        if self.request_handler is None:
+            from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports due to circlar reference with ModelRequestHandler
+            self.request_handler = ModelRequestHandler(library=self)
 
         script = self.get_script_request(org, name, version)
         if script is None:
@@ -811,17 +806,21 @@ class CadLibrary:
             NOTE: Use this function with await to wait for the results, or run a sync task for non-blocking
         """
 
-        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
-        self.request_handler = ModelRequestHandler(library=self)
+        if self.request_handler is None:
+            from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports due to circlar reference with ModelRequestHandler
+            self.request_handler = ModelRequestHandler(library=self)
         
-        if not script.is_pre_cachable():
+        if not script.is_pre_cachable(only_params=only_params):
             self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
             return None
         
         # basic batch information to keep track of progress
         num_variants = script.get_num_variants(only_params=only_params)
 
+        print(num_variants)
+
         if num_variants is None:
+            self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
             return 'no-precompute possible'
         else:
             self.register_compute_batch(compute_batch_id, num_tasks=num_variants)
@@ -848,7 +847,7 @@ class CadLibrary:
             NOTE: Cache management is centralized: We don't allow workers to write to cache!
         """
 
-        from .ModelRequestHandler import ModelRequestHandler # keep this from the normal imports
+        
         self.request_handler = ModelRequestHandler(library=self)
         
         async_compute_tasks = []

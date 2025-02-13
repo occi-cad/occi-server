@@ -122,7 +122,7 @@ class Admin:
             # Submit a request to pre-calculate models variant of a script with specific params (the others params have default values)
             # /admin/precalc/{org}/{name}/{version}?params=width,height,..
             @api.get('/admin/precalc/{script_org}/{script_name}/{script_version}')
-            async def precalc(script_org:str, script_name:str, script_version:str, params:str=[], credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
+            async def precalc(script_org:str, script_name:str, script_version:str, params:str='', credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 return await self._handle_precalc_request(script_org, script_name, script_version, params.split(',') if len(params) > 0 else [])
 
             # Get results from pre-calculate job
@@ -163,6 +163,7 @@ class Admin:
         # If request (and possible) start pre-calculation of models into cache asynchronously
         if not req.pre_calculate or not req.script.is_pre_cachable():
             # no compute requested (or available)
+            self.api_generator.library.reload() # reload library to add new script
             return PublishJob(script=req.script, status='success')
         else:
             # lets do a pre-caching compute
@@ -170,6 +171,7 @@ class Admin:
         
             def on_done(batch_id) -> bool:
                 self.publish_jobs[pub_job.id].status = 'success'
+                self.api_generator.library.reload() # reload library to add new script
 
             asyncio.create_task(
                 self.api_generator.library.compute_script_cache_async(script=req.script, only_params=None, compute_batch_id=batch_id, on_done=on_done)
@@ -226,22 +228,23 @@ class Admin:
             raise HTTPException(status_code=400, detail=f'Cannot find script with org="{script_org}", name="{script_name}", version="{script_version}"')
 
         # Test the incoming params. Case insensitive. 
-        validated_params = [p for p in script.params.keys() if p.lower() in [ p.lower() for p in params ]]
+        only_params_validated = [p for p in script.params.keys() if p.lower() in [ p.lower() for p in params ]]
 
-        if len(validated_params) == 0:
+        if len(only_params_validated) == 0:
             raise HTTPException(status_code=400, detail=f'Please supply a list of valid parameter names to pre-calculate. Valid are: {",".join(script.params.keys())}')
 
         # Start the pre-calculation (without using await) and return the batch_id
         batch_id = str(uuid.uuid4())
+
         # callback function
         def on_done(batch_id) -> bool:
                 # Don't do much here for now
-                self.logger.info(f'Pre-calculation of script {script.get_namespace()} with params {validated_params} done!')
+                self.logger.info(f'Pre-calculation of script {script.get_namespace()} with params {only_params_validated} done!')
 
         asyncio.create_task(
                 library.compute_script_cache_async(
                     script=script, 
-                    only_params=validated_params, 
+                    only_params=only_params_validated, 
                     compute_batch_id=batch_id, 
                     on_done=on_done)
             ) # don't await this

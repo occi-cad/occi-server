@@ -36,6 +36,9 @@ from .CadLibrary import CadLibrary
 
 from kombu import Exchange, Queue
 
+from dotenv import dotenv_values
+CONFIG = dotenv_values()  
+
 class ModelRequestHandler():
 
     #### SETTINGS ####
@@ -68,11 +71,10 @@ class ModelRequestHandler():
             from .celery_tasks import celery as celery_app
             self.celery = celery_app # from import celery_tasks
 
-            self.setup_celery_exchanges()
-
             if self.check_celery() is False:
                 self.logger.error('ModelRequestHandler::__init__(library): Celery is not connected. We cannot send requests to compute! Check .env config.') 
             else:
+                self.setup_celery_exchanges()
                 self.logger.info('ModelRequestHandler::__init__(library): Celery is connected to RMQ succesfully!')
         else:
             self.logger.info('ModelRequestHandler::__init__(library): **** Celery is disabled because workers are turned off! See no_workers flag ****')
@@ -97,7 +99,7 @@ class ModelRequestHandler():
             after test populate in self.available_scriptengine_workers
         '''
 
-        self.logger.info('**** CHECKING CELERY CONNECTIONS ****')
+        self.logger.info(f'**** CHECKING CELERY CONNECTIONS - broker="{self.celery.conf.broker_url}" result backend=""{self.celery.conf.result_backend}" ****')
 
         try:
             self.celery.control.inspect(timeout=1.0).ping()
