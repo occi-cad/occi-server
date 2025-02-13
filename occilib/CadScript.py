@@ -36,7 +36,7 @@ class ModelRequest(BaseModel):
     format: ModelFormat = 'step' # requested output format of the model
     output: RequestResultFormat = None
     quality: ModelQuality = 'high' # TODO
-    batch_id: str = None # some id to group requests 
+    batch_id: str = None # some id to group requests
     settings:dict = {} # specific options for execution engine
 
     def get_param_query_string(self) -> str:

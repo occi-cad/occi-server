@@ -119,11 +119,14 @@ class Admin:
             async def unpublish(script_id:int, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
                 return script_id
             
-            # Submit a request to pre-calculate models variant of a script with specific params (the others params have default values)
-            # /admin/precalc/{org}/{name}/{version}?params=width,height,..
-            @api.get('/admin/precalc/{script_org}/{script_name}/{script_version}')
-            async def precalc(script_org:str, script_name:str, script_version:str, params:str='', credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
-                return await self._handle_precalc_request(script_org, script_name, script_version, params.split(',') if len(params) > 0 else [])
+            """
+              Submit a request to pre-calculate models variant of a script with specific params (the others params have default values)
+                params: List[str] - list of parameter names to pre-calculate with
+                settings: Dict - settings to pass to the execution engine
+            """
+            @api.post('/admin/precalc/{script_org}/{script_name}/{script_version}')
+            async def precalc(script_org:str, script_name:str, script_version:str, params:List[str]=[], settings:Dict={}, credentials: HTTPBasicCredentials = Depends(self._validate_credentials)):
+                return await self._handle_precalc_request(script_org, script_name, script_version, params, settings)
 
             # Get results from pre-calculate job
             @api.get('/admin/precalc/{batch_id}')
@@ -215,15 +218,19 @@ class Admin:
         return True
     
 
-    async def _handle_precalc_request(self, script_org:str, script_name:str, script_version:str, params:List[str]) -> bool:
+    async def _handle_precalc_request(self, script_org:str, script_name:str, script_version:str, params:List[str], settings:Dict={}) -> bool:
         """
             Handles a request to pre-calculate a given script with given parameters
+
+            settings - Dictionary passed to CAD execution engine in CadScriptRequest.request.settings (for example in Archiyou: { metrics:[x,y], docs:False, tables, ... })
         """ 
 
         library = self.api_generator.library
         
         # First do some testing
         script = library.get_script_request(org=script_org, name=script_name, version=script_version)
+        script.request.settings = settings # pass settings
+
         if script is None: 
             raise HTTPException(status_code=400, detail=f'Cannot find script with org="{script_org}", name="{script_name}", version="{script_version}"')
 

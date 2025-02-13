@@ -817,8 +817,6 @@ class CadLibrary:
         # basic batch information to keep track of progress
         num_variants = script.get_num_variants(only_params=only_params)
 
-        print(num_variants)
-
         if num_variants is None:
             self.logger.error(f'CadLibrary::compute_script_cache: Script is not cachable!')
             return 'no-precompute possible'
